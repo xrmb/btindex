@@ -23,7 +23,7 @@ foreach my $url ( 'http://zer0day.to/fullscrape.gz',
 {
   next if($ARGV[0] && $url !~ $ARGV[0]);
 
-  my $out = $config->{temp}.'data';
+  my $out = $config->{temp}.'/data';
   unlink($out); ### possible leftovers
   if($url =~ /\.gz$/) { $out .= '.gz'; }
   unlink($out);
