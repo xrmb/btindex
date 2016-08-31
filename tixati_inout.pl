@@ -14,10 +14,12 @@ use strict;
 $| = 1;
 my $config = btindex::config();
 
-my ($db) = @ARGV;
+my ($db, $start) = @ARGV;
 $db ||= 'rss';
 my $db404 = new btindex::tdb(file => "dbs/$db");
 my $dbgot = new btindex::tdb(file => 'dbs/torrents_got');
+
+if($start) { $db404->set_it_id($start); }
 
 my $con = new Win32::Console();
 
@@ -71,16 +73,11 @@ MAIN: for(;;)
 
   while(defined(my $tid = $db404->it_id()))
   {
-    if(-f sprintf("%s/%s/%s/%s", $config->{torrents}, substr($tid, 0, 2), substr($tid, 2, 2), $tid)) { next; }
     if(defined($dbgot->sid($tid))) { next; }
-    if($ARGV[1] && $tid !~ $ARGV[1]) { next; }
-    if($add == 0) { last; }
-    $add--;
+    if(-f sprintf("%s/%s/%s/%s", $config->{torrents}, substr($tid, 0, 2), substr($tid, 2, 2), $tid)) { next; }
 
     sleep(1);
     my ($code, $content) = tixati_transfer_add($tid);
-
-
     if($code == 200)
     {
     }
@@ -88,6 +85,9 @@ MAIN: for(;;)
     {
       printf("add\t%s: %d\n%s\n", $tid, $code, $content);
     }
+
+    $add--;
+    if($add == 0) { last; }
   }
 
 
