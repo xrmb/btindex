@@ -2,3 +2,5 @@
 torrents	d:\btindex\torrents
 # where is tixati storing the torrents
 tixati_torrents	d:\btindex\tixati
+# where can temp stuff be stored?
+temp	d:\temp
