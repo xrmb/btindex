@@ -13,6 +13,7 @@ use File::Path qw(make_path);
 use Digest::SHA1;
 use LWP;
 use Win32::Process::Info;
+use Math::Random;
 
 use strict;
 
@@ -146,10 +147,11 @@ sub read_file
 
   my $d;
   my $fh;
-  if(!-f $f) { return ''; }
+  my @s = stat($f);
+  if(!@s) { return ''; }
   open($fh, '<', $f) || die $!;
   binmode($fh);
-  read($fh, $d, -s $f);
+  read($fh, $d, $s[7]);
   close($fh);
 
   return $d;
@@ -186,22 +188,26 @@ sub foreach_torrent
   my %args = @_;
 
   my $r = 0;
-  opendir(my $dh1, 'torrents') || die $!;
-  foreach my $l1 (sort grep { /^[0-9A-F]{2}$/ } readdir($dh1))
+  my $tdir = 'r:';
+  opendir(my $dh1, "$tdir/torrents") || die $!;
+  L1: foreach my $l1 (sort grep { /^[0-9A-F]{2}$/ } readdir($dh1))
   {
     if($args{start} && $l1 lt substr($args{start}, 0, 2)) { next; }
 
-    opendir(my $dh2, "torrents/$l1") || die $!;
+    opendir(my $dh2, "$tdir/torrents/$l1") || die $!;
     foreach my $l2 (sort grep { /^[0-9A-F]{2}$/ } readdir($dh2))
     {
       if($args{start} && "$l1$l2" lt substr($args{start}, 0, 4)) { next; }
 
-      opendir(my $dh3, "torrents/$l1/$l2") || die $!;
+      opendir(my $dh3, "$tdir/torrents/$l1/$l2") || die $!;
       foreach my $l3 (sort grep { /^[0-9A-F]{40}$/ } readdir($dh3))
       {
         if($args{start} && $l3 lt $args{start}) { next; }
+        if($args{end} && $l3 gt $args{end}) { last L1; }
 
-        my $tf = "torrents/$l1/$l2/$l3";
+        my $tf = "$tdir/torrents/$l1/$l2/$l3";
+        if($args{mtime} && (stat($tf))[9] < $args{mtime}) { next; }
+
         if($args{invalid} || !$args{invalid} && -s $tf > 3)
         {
           my $d = {};
@@ -218,12 +224,16 @@ sub foreach_torrent
             if($td !~ /^d/ || $td !~ /e$/)
             {
               warn($tf);
+              rename($tf, $tf.'.broken');
               next;
             }
             eval { $d = Convert::Bencode_XS::bdecode($td); };
             if($@)
             {
-              warn("$tf -> $@");
+              my $msg = $@;
+              $msg =~ s/(pos \d+)[\0^\0]*/$1/;
+              warn("$tf -> $msg");
+              rename($tf, $tf.'.broken');
               next;
             }
           }
@@ -242,9 +252,9 @@ sub foreach_torrent
   if($r) { return; }
 
 
-  if($args{'fromzip'})
+  if($args{fromzip})
   {
-    foreach my $d1 (0..255)
+    D1: foreach my $d1 (0..255)
     {
       my $l1 = sprintf("%02X", $d1);
       if($args{start} && $l1 lt substr($args{start}, 0, 2)) { next; }
@@ -253,14 +263,18 @@ sub foreach_torrent
       {
         my $l2 = sprintf("%02X", $d2);
         if($args{start} && $l1.$l2 lt substr($args{start}, 0, 4)) { next; }
+        if($args{end} && $l1.$l2 gt substr($args{end}, 0, 4)) { last D1; }
 
         if($args{data})
         {
+          if($args{mtime} && (stat("torrents/$l1/$l2.zip"))[9] < $args{mtime}) { next; }
+
           my $zip = Archive::Zip->new();
           if($zip->read("torrents/$l1/$l2.zip") != Archive::Zip::AZ_OK) { die $!; }
           foreach my $m (sort { $a->fileName() cmp $b->fileName() } grep { $_->fileName() =~ m!^[0-9A-F]{40}$! } $zip->members())
           {
             if($args{start} && $m->fileName() lt $args{start}) { next; }
+            if($args{mtime} && scalar($m->lastModTime()) < $args{mtime}) { next; }
 
             my $tf = "torrents/$l1/$l2/".$m->fileName();
             my $d = {};
@@ -273,11 +287,20 @@ sub foreach_torrent
               warn($tf);
               next;
             }
-            eval { $d = Convert::Bencode_XS::bdecode($td); };
-            if($@)
+            if($args{data} eq 'raw')
             {
-              warn($tf);
-              next;
+              $d = $td;
+            }
+            else
+            {
+              eval { $d = Convert::Bencode_XS::bdecode($td); };
+              if($@)
+              {
+                my $msg = $@;
+                $msg =~ s/(pos \d+)[\0^\0]*/$1/;
+                warn("$tf -> $msg");
+                next;
+              }
             }
 
             $r = $exec->($tf, $d, $l);
@@ -286,6 +309,8 @@ sub foreach_torrent
         }
         else
         {
+          if($args{mtime}) { die 'todo'; }
+
           my $fh;
           my @l;
           open($fh, '-|', "unzip -l torrents/$l1/$l2.zip") || die $!;
@@ -308,10 +333,10 @@ sub foreach_torrent
     }
   }
 
-  if($args{'frommzip'})
+  if($args{frommzip})
   {
     opendir(my $dh1, 'torrents') || die $!;
-    foreach my $l1 (sort grep { /^m[0-9A-F]{2}.zip$/ } readdir($dh1))
+    L1: foreach my $l1 (sort grep { /^m[0-9A-F]{2}.zip$/ } readdir($dh1))
     {
       if($args{start} && substr($l1, 1, 2) lt substr($args{start}, 0, 2)) { next; }
 
@@ -322,6 +347,7 @@ sub foreach_torrent
         foreach my $m (sort { $a->fileName() cmp $b->fileName() } grep { !$_->isDirectory() && $_->fileName() =~ m!^[0-9A-F]{2}/[0-9A-F]{40}$! } $zip->members())
         {
           if($args{start} && substr($m->fileName(), 3) lt $args{start}) { next; }
+          if($args{end} && substr($m->fileName(), 3) gt $args{end}) { next; }
 
           my $tf = "torrents/$l1/".$m->fileName();
           my $d = {};
@@ -337,7 +363,9 @@ sub foreach_torrent
           eval { $d = Convert::Bencode_XS::bdecode($td); };
           if($@)
           {
-            warn($tf);
+            my $msg = $@;
+            $msg =~ s/(pos \d+)[\0^\0]*/$1/;
+            warn("$tf -> $msg");
             next;
           }
 
@@ -460,20 +488,36 @@ sub run_only_once
 {
   my $r = 0;
   my $s = $0;
-  $s =~ s!.*/!!;
+  $s =~ s!.*[\\/]!!;
 
-  my $fh;
-  open($fh, '-|', 'ps -ef');
-  while(my $l = <$fh>)
+  if($^O eq 'MSWin32')
   {
-    next if($l !~ m!/bin/perl!);
-    next if(index($l, $s) == -1);
-    my @l = split(/\s+/, $l);
-    next if($l[1] == $$ || $l[2] == $$);
-    print("already running: $l");
-    $r = 1;
+    my $fh;
+    open($fh, '-|', qq|wmic process where "CommandLine like '%$s%'" get CommandLine, ProcessID|);
+    while(my $l = <$fh>)
+    {
+      next if($l !~ /perl\.exe/);
+      my @l = split(/\s+/, $l);
+      next if($l[-1] == $$);
+      print("already running: $l");
+      $r = 1;
+    }
   }
-  close($fh);
+  else
+  {
+    my $fh;
+    open($fh, '-|', 'ps -ef');
+    while(my $l = <$fh>)
+    {
+      next if($l !~ m!/bin/perl!);
+      next if(index($l, $s) == -1);
+      my @l = split(/\s+/, $l);
+      next if($l[1] == $$ || $l[2] == $$);
+      print("already running: $l");
+      $r = 1;
+    }
+    close($fh);
+  }
 
   if($r)
   {
@@ -749,6 +793,7 @@ sub load
   if(!-f $self->{dbf}) { return 'no dbf'; }
   $self->{db} = {};
 
+  if(-f $self->{dbf}.'.new') { die "a new db is present ($self->{dbf})"; }
   my $fh;
   open($fh, '<', $self->{dbf}) || die $!;
   binmode($fh);
@@ -825,8 +870,20 @@ sub save
   }
   close($fh);
 
-  if(-f $self->{dbf}) { unlink($self->{dbf}.'.old'); rename($self->{dbf}, $self->{dbf}.'.old') || die $!; }
-  rename($self->{dbf}.'.new', $self->{dbf}) || die $!;
+  if(-f $self->{dbf})
+  {
+    #warn 'exists '.$self->{dbf};
+    if(-f $self->{dbf}.'.old') { unlink($self->{dbf}.'.old') || die $!; }
+    rename($self->{dbf}, $self->{dbf}.'.old') || die $!;
+  }
+  for(1..20)
+  {
+    last if !-f $self->{dbf}.'.new';
+    #warn 'new there '.$self->{dbf};
+    rename($self->{dbf}.'.new', $self->{dbf}) || warn $!;
+    sleep(10);
+  }
+  if(-f $self->{dbf}.'.new') { die "new still there"; }
   unlink($self->{dbf}.'.old');
 
   $self->{dirty} = 0;
@@ -1071,7 +1128,9 @@ sub random_id
     my $id1 = sprintf('%02X', $r1);
     next if(!$self->{db}{$id0}{$id1});
 
-    my $r2 = int(rand(length($self->{db}{$id0}{$id1}))/20);
+    #my $r2 = int(rand(length($self->{db}{$id0}{$id1}))/20);
+    my $r2 = int(Math::Random::random_uniform_integer(1, 0, length($self->{db}{$id0}{$id1})) / 20);
+
 
     return $self->id(($r0 << 24) + ($r1 << 16) + $r2);
   }
@@ -1096,12 +1155,14 @@ sub random_idff
   #my $r = sysread($fh, $offsets, 0x40000);
   #if($r != 0x40000) { die "offsets: want ".(0x40000).", got: $r, length: ".length($offsets); }
 
-  my $r = 0;
-  for (0..10)
-  {
-    $r += rand(32768); ### my windows RANDBITS
-  }
-  $r %= $s;
+  #my $r = 0;
+  #for (0..10)
+  #{
+  #  $r += rand(32768); ### my windows RANDBITS
+  #}
+  #$r %= $s;
+
+  my $r = Math::Random::random_uniform_integer(1, 0, $s);
 
   my $to = 0x40000 + $r * $count * 20;
   seek($fh, $to, 0) || die $!;
