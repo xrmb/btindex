@@ -14,15 +14,10 @@ use strict;
 $| = 1;
 my $config = btindex::config();
 
-my $db = 'torrents_404';
-
-my $db404 = new btindex::tdb(file => 'dbs/'.$db);
-#my $db404 = new btindex::tdb(file => 'dbs/crawl');
-#my $db404 = new btindex::tdb(file => 'dbs/tixati_a');
-#my $db404 = new btindex::tdb(file => 'dbs/tixati_g');
-#my $db404 = new btindex::tdb(file => 'dbs/bitsnoop_all');
+my ($db) = @ARGV;
+$db ||= 'rss';
+my $db404 = new btindex::tdb(file => "dbs/$db");
 my $dbgot = new btindex::tdb(file => 'dbs/torrents_got');
-#my $dbtix = new btindex::tdb(file => 'dbs/torrents_tix', save => 100);
 
 my $con = new Win32::Console();
 
@@ -32,7 +27,7 @@ my $tdone = 0;
 my ($session) = map { (split(/\s+/, substr($_, 1)))[2] } grep { /^>/ } split(/[\n\r]+/, `query session`);
 MAIN: for(;;)
 {
-  #if(-f 'r:/zipwait') { sleep(1); next; }
+  if((ReadKey(-1) || '') eq 'x') { print("x-key\n"); last MAIN; }
 
   my $tl = `tasklist /FI "SESSION eq $session"`;
   if($tl !~ /tixati.exe/i)
@@ -61,6 +56,7 @@ MAIN: for(;;)
   {
     foreach my $i (@$t)
     {
+      my $r = tixati_transfer_delete($i->{id});
       sleep(1);
       my ($code, $content) = tixati_transfer_delete($i->{id});
       #printf("first\t%s: %d\n", $i->{id}, $r);
@@ -73,13 +69,11 @@ MAIN: for(;;)
 
   if($add <= 0) { sleep(10); next; }
 
-  #while(defined(my $tid = $db404->it_id()))
-  while(defined(my $tid = $db404->random_id()))
+  while(defined(my $tid = $db404->it_id()))
   {
     if(-f sprintf("%s/%s/%s/%s", $config->{torrents}, substr($tid, 0, 2), substr($tid, 2, 2), $tid)) { next; }
     if(defined($dbgot->sid($tid))) { next; }
-    #if($tid !~ /^6/) { next; }
-    #if(defined($dbtix->sid($tid))) { next; }
+    if($ARGV[1] && $tid !~ $ARGV[1]) { next; }
     if($add == 0) { last; }
     $add--;
 
@@ -89,7 +83,6 @@ MAIN: for(;;)
 
     if($code == 200)
     {
-      #defined($dbtix->sid($tid, add => 1)) || last;
     }
     else
     {
@@ -97,10 +90,6 @@ MAIN: for(;;)
     }
   }
 
-  #if(!defined($tid))
-  #{
-  #  $db404 = new btindex::tdb(file => 'dbs/torrents_404');
-  #}
 
   my $done = 0;
   my $dh;
