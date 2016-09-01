@@ -47,7 +47,7 @@ foreach my $url ( 'http://zer0day.to/fullscrape.gz',
     my $i = -1;
     my $l = $i;
     my $c = 0;
-    my $a = 0;
+    my $ac = 0;
     while(($i = index($data, "\n", $i+1)) != -1)
     {
       $c++;
@@ -60,8 +60,8 @@ foreach my $url ( 'http://zer0day.to/fullscrape.gz',
       my $id = $db->sid($tid, add => \$added);
       if($added)
       {
-        printf("%s\t%08x\t%d\t%d\n", $tid, $id, $a, $c);
-        $a++;
+        printf("%s\t%08x\t%d\t%d\n", $tid, $id, $ac, $c);
+        $ac++;
       }
 
       $l = $i;
@@ -71,6 +71,7 @@ foreach my $url ( 'http://zer0day.to/fullscrape.gz',
   {
     my $i = -1;
     my $c = 0;
+    my $ac = 0;
     while(($i = index($data, 'i0ee20:', $i+1)) != -1)
     {
       $c++;
@@ -80,8 +81,8 @@ foreach my $url ( 'http://zer0day.to/fullscrape.gz',
       my $id = $db->sid($tid, add => \$added);
       if($added)
       {
-        printf("%s\t%08x\t%d\t%d\n", $tid, $id, $a, $c);
-        $a++;
+        printf("%s\t%08x\t%d\t%d\n", $tid, $id, $ac, $c);
+        $ac++;
       }
     }
   }
