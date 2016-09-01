@@ -188,7 +188,7 @@ sub foreach_torrent
   my %args = @_;
 
   my $r = 0;
-  my $tdir = 'r:';
+  my $tdir = config('torrents');
   opendir(my $dh1, "$tdir/torrents") || die $!;
   L1: foreach my $l1 (sort grep { /^[0-9A-F]{2}$/ } readdir($dh1))
   {
