@@ -777,6 +777,12 @@ sub DESTROY
 }
 
 
+sub clear
+{
+  my $self = shift();
+  $self->{db} = {};
+}
+
 
 sub load
 {
