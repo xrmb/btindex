@@ -78,7 +78,7 @@ foreach my $url ( 'http://zer0day.to/fullscrape.gz',
       my $id = $db->sid($tid, add => \$added);
       if($added)
       {
-        printf("%s\t%08x\t%d\t%d\n", $tid, $id, $ac, $c);
+        printf("%s\t%08x\t%d\t%d\t%.2f%%\n", $tid, $id, $ac, $c, $ac/$c*100);
         $ac++;
 
         $dbn->sid($tid, add => \$added);
@@ -113,7 +113,7 @@ foreach my $url ( 'http://zer0day.to/fullscrape.gz',
       my $id = $db->sid($tid, add => \$added);
       if($added)
       {
-        printf("%s\t%08x\t%d\t%d\n", $tid, $id, $ac, $c);
+        printf("%s\t%08x\t%d\t%d\t%.2f%%\n", $tid, $id, $ac, $c, $ac/$c*100);
         $ac++;
 
         $dbn->sid($tid, add => \$added);
