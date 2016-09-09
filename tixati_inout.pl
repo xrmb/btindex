@@ -3,6 +3,7 @@
 use LWP;
 use Term::ReadKey;
 use Win32::Console;
+use Getopt::Long;
 
 use Whatsup;
 
@@ -14,11 +15,15 @@ use strict;
 $| = 1;
 my $config = btindex::config();
 
-my ($db, $start) = @ARGV;
-$db ||= 'rss';
+my $db = 'rss';
+my $start;
+my $random;
+GetOptions('db=s' => \$db, 'start=s' => \$start, random => \$random) || die;
+
 my $db404 = new btindex::tdb(file => "dbs/$db");
 my $dbgot = new btindex::tdb(file => 'dbs/torrents_got');
 
+$dbgot->load();
 if($start) { $db404->set_it_id($start); }
 
 my $con = new Win32::Console();
@@ -39,10 +44,11 @@ MAIN: for(;;)
     sleep(10);
   }
 
+  my $add;
   my $t = tixati_transfers();
   if(!$t) { sleep(5); next; }
 
-  my $add = $tatat - scalar(@$t);
+  $add = $tatat - scalar(@$t);
 
   ### delete "done" ###
   foreach my $i (grep { $_->{mode} eq 'offline'} @$t)
@@ -60,7 +66,7 @@ MAIN: for(;;)
     {
       my $r = tixati_transfer_delete($i->{id});
       sleep(1);
-      my ($code, $content) = tixati_transfer_delete($i->{id});
+      #my ($code, $content) = tixati_transfer_delete($i->{id});
       #printf("first\t%s: %d\n", $i->{id}, $r);
       $add++;
       $tadd++;
@@ -71,7 +77,7 @@ MAIN: for(;;)
 
   if($add <= 0) { sleep(10); next; }
 
-  while(defined(my $tid = $db404->it_id()))
+  while(defined(my $tid = ($random ? $db404->random_id() : $db404->it_id())))
   {
     if(defined($dbgot->sid($tid))) { next; }
     if(-f sprintf("%s/%s/%s/%s", $config->{torrents}, substr($tid, 0, 2), substr($tid, 2, 2), $tid)) { next; }
