@@ -567,6 +567,77 @@ sub load_hash
 }
 
 
+sub torrent_infohash_dechunk
+{
+  my ($chunks, $at, $is, $ie) = @_;
+
+  my $item = shift(@$chunks);
+  if($item eq 'd')
+  {
+    $item = shift(@$chunks);
+    while($item ne 'e')
+    {
+      unshift(@$chunks, $item);
+      my $key = torrent_infohash_dechunk($chunks);
+      if($key eq 'info' && $at eq '.')
+      {
+        $$is = scalar(@$chunks);
+      }
+
+      torrent_infohash_dechunk($chunks, $at.'.'.$key, $is, $ie);
+
+      if($key eq 'info' && $at eq '.')
+      {
+        $$ie = scalar(@$chunks);
+      }
+
+      $item = shift(@$chunks);
+    }
+    return;
+  }
+
+  if($item eq 'l')
+  {
+    $item = shift(@$chunks);
+    while($item ne 'e')
+    {
+      unshift(@$chunks, $item);
+      torrent_infohash_dechunk($chunks);
+      $item = shift(@$chunks);
+    }
+    return;
+  }
+
+  if($item eq 'i')
+  {
+    $item = shift(@$chunks);
+    while($item ne 'e')
+    {
+      $item = shift(@$chunks);
+    }
+    return;
+  }
+
+  if($item =~ /\d/)
+  {
+    my $num;
+    while($item =~ /\d/)
+    {
+      $num .= $item;
+      $item = shift(@$chunks);
+    }
+    my $key = '';
+    for(1 .. $num)
+    {
+      $key .= shift(@$chunks);
+    }
+    return $key;
+  }
+
+  die 'hmmm?';
+}
+
+
 sub torrent_infohash
 {
   my $string = shift;
@@ -574,69 +645,7 @@ sub torrent_infohash
   my $is = 0;
   my $ie = 0;
 
-  my $_dechunk;
-  $_dechunk = sub
-  {
-    my ($chunks, $at, $is, $ie) = @_;
-
-    my $item = shift(@{$chunks});
-    if($item eq 'd') {
-      $item = shift(@{$chunks});
-      my %hash;
-      while($item ne 'e') {
-        unshift(@{$chunks}, $item);
-        my $key = $_dechunk->($chunks);
-        if($key eq 'info' && $at eq '.')
-        {
-          $$is = scalar(@$chunks);
-        }
-
-        $hash{$key} = $_dechunk->($chunks, $at.'.'.$key, $is, $ie);
-
-        if($key eq 'info' && $at eq '.')
-        {
-          $$ie = scalar(@$chunks);
-        }
-
-        $item = shift(@{$chunks});
-      }
-      return \%hash;
-    }
-    if($item eq 'l') {
-      $item = shift(@{$chunks});
-      my @list;
-      while($item ne 'e') {
-        unshift(@{$chunks}, $item);
-        push(@list, $_dechunk->($chunks));
-        $item = shift(@{$chunks});
-      }
-      return \@list;
-    }
-    if($item eq 'i') {
-      my $num;
-      $item = shift(@{$chunks});
-      while($item ne 'e') {
-        $num .= $item;
-        $item = shift(@{$chunks});
-      }
-      return $num;
-    }
-    if($item =~ /\d/) {
-      my $num;
-      while($item =~ /\d/) {
-        $num .= $item;
-        $item = shift(@{$chunks});
-      }
-      my $line = '';
-      for(1 .. $num) {
-        $line .= shift(@{$chunks});
-      }
-      return $line;
-    }
-    return $chunks;
-  };
-
-  my $root = $_dechunk->(\@chunks, '.', \$is, \$ie);
+  torrent_infohash_dechunk(\@chunks, '.', \$is, \$ie);
   return undef unless($is && $ie);
 
   my $s = length($string)-$is;
