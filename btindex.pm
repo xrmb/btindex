@@ -189,23 +189,23 @@ sub foreach_torrent
 
   my $r = 0;
   my $tdir = config('torrents');
-  opendir(my $dh1, "$tdir/torrents") || die $!;
+  opendir(my $dh1, $tdir) || die "$! ($tdir)";
   L1: foreach my $l1 (sort grep { /^[0-9A-F]{2}$/ } readdir($dh1))
   {
     if($args{start} && $l1 lt substr($args{start}, 0, 2)) { next; }
 
-    opendir(my $dh2, "$tdir/torrents/$l1") || die $!;
+    opendir(my $dh2, "$tdir/$l1") || die $!;
     foreach my $l2 (sort grep { /^[0-9A-F]{2}$/ } readdir($dh2))
     {
       if($args{start} && "$l1$l2" lt substr($args{start}, 0, 4)) { next; }
 
-      opendir(my $dh3, "$tdir/torrents/$l1/$l2") || die $!;
+      opendir(my $dh3, "$tdir/$l1/$l2") || die $!;
       foreach my $l3 (sort grep { /^[0-9A-F]{40}$/ } readdir($dh3))
       {
         if($args{start} && $l3 lt $args{start}) { next; }
         if($args{end} && $l3 gt $args{end}) { last L1; }
 
-        my $tf = "$tdir/torrents/$l1/$l2/$l3";
+        my $tf = "$tdir/$l1/$l2/$l3";
         if($args{mtime} && (stat($tf))[9] < $args{mtime}) { next; }
 
         if($args{invalid} || !$args{invalid} && -s $tf > 3)
