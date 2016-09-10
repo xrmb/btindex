@@ -22,8 +22,8 @@ GetOptions('db=s' => \$db, 'start=s' => \$start, random => \$random) || die;
 
 my $db404 = new btindex::tdb(file => "dbs/$db");
 my $dbgot = new btindex::tdb(file => 'dbs/torrents_got');
+my $dbfs = new btindex::tdb(file => 'dbs/torrents_fs');
 
-$dbgot->load();
 if($start) { $db404->set_it_id($start); }
 
 my $con = new Win32::Console();
@@ -79,6 +79,7 @@ MAIN: for(;;)
 
   while(defined(my $tid = ($random ? $db404->random_id() : $db404->it_id())))
   {
+    if(defined($dbfs->sid($tid))) { next; }
     if(defined($dbgot->sid($tid))) { next; }
     if(-f sprintf("%s/%s/%s/%s", $config->{torrents}, substr($tid, 0, 2), substr($tid, 2, 2), $tid)) { next; }
 
