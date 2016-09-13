@@ -3,24 +3,33 @@
 
 use LWP;
 use Compress::Zlib;
+use Term::ReadKey;
 
+use lib (__FILE__.'/..');
 use btindex;
 
 use strict;
 
 
+if($ARGV[0] eq 'create') { exit system(qq|schtasks /create /tn "$ARGV[1]\\btindex\\db_trackers" /st 00:00 /sc minute /mo 180 /tr "$^X |.Cwd::abs_path(__FILE__).qq|"|); }
+if($ARGV[0] eq 'delete') { exit system(qq|schtasks /delete /tn "$ARGV[1]\\btindex\\db_trackers"|); }
+
+
+my @ts = localtime();
 my $config = btindex::config();
 
-my $dbc = new btindex::tdb(file => 'dbs/trackers_c', save => 1_000_000);
-my $dbi = new btindex::tdb(file => 'dbs/trackers_i', save => 1_000_000);
-my $dbn = new btindex::tdb(file => 'dbs/trackers_n', save => 1_000_000);
-my $db = new btindex::tdb(file => 'dbs/trackers', save => 1_000_000);
+my $dbc = new btindex::tdb(file => __FILE__.'/../dbs/trackers_c', save => 10_000_000);
+my $dbi = new btindex::tdb(file => __FILE__.'/../dbs/trackers_i', save => 10_000_000);
+my $dbn = new btindex::tdb(file => __FILE__.'/../dbs/trackers_n', save => 10_000_000);
+my $dbnd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_n_%04d%02d%02d', $ts[5]+1900, $ts[4]+1, $ts[3]), save => 10_000_000);
+my $db = new btindex::tdb(file => __FILE__.'/../dbs/trackers', save => 10_000_000);
 
 $dbc->clear();
 $dbi->clear();
 $dbn->clear();
 
-foreach my $url ( 'http://zer0day.to/fullscrape.gz',
+TRACKER: foreach my $url (
+                 'http://zer0day.to/fullscrape.gz',
                   'http://coppersurfer.tk/full_scrape_not_a_tracker.tar.gz',
                   'http://scrape.leechers-paradise.org/static_scrape',
                   #'http://internetwarriors.net/full.tar.gz',
@@ -60,6 +69,8 @@ foreach my $url ( 'http://zer0day.to/fullscrape.gz',
     my $ac = 0;
     while(($i = index($data, "\n", $i+1)) != -1)
     {
+      if((ReadKey(-1) || '') eq 'x') { last TRACKER; }
+
       $c++;
 
       my $data0 = substr($data, $l+1, $i-$l);
@@ -82,6 +93,7 @@ foreach my $url ( 'http://zer0day.to/fullscrape.gz',
         $ac++;
 
         $dbn->sid($tid, add => \$added);
+        $dbnd->sid($tid, add => \$added);
       }
 
       if($cc) { $dbc->sid($tid, add => \$added); }
@@ -97,6 +109,8 @@ foreach my $url ( 'http://zer0day.to/fullscrape.gz',
     my $ac = 0;
     while(($i = index($data, 'd8:completei', $i+1)) != -1)
     {
+      if((ReadKey(-1) || '') eq 'x') { last TRACKER; }
+
       $c++;
 
       # 123456789_123456789_d8:completei0e10:downloadedi0e10:incompletei1ee20:
@@ -117,6 +131,7 @@ foreach my $url ( 'http://zer0day.to/fullscrape.gz',
         $ac++;
 
         $dbn->sid($tid, add => \$added);
+        $dbnd->sid($tid, add => \$added);
       }
 
       if($cc) { $dbc->sid($tid, add => \$added); }
