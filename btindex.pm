@@ -863,6 +863,7 @@ sub save
   open($fh, '>', $self->{dbf}.'.new') || die "fopen: $! / ".$self->{dbf}.'.new';
   binmode($fh);
   my $tc = 0;
+  my $d = '';
   foreach my $i0 (0..0xFF)
   {
     my $id0 = sprintf('%02X', $i0);
@@ -872,20 +873,23 @@ sub save
       #my $c = length($self->{db}{$id0}{$id1})/40;
       my $c = length($self->{db}{$id0}{$id1})/20;
       die "$id1 -> $c" if($c > 0xFFFF);
-      print($fh pack('N', $c));
+      $d .= pack('N', $c);
       $tc += $c;
     }
   }
+  print($fh $d);
 
   foreach my $i0 (0..0xFF)
   {
     my $id0 = sprintf('%02X', $i0);
+    $d = '';
     foreach my $i1 (0..0xFF)
     {
       my $id1 = sprintf('%02X', $i1);
       #print($fh pack('H*', $self->{db}{$id0}{$id1}));
-      print($fh $self->{db}{$id0}{$id1});
+      $d .= $self->{db}{$id0}{$id1};
     }
+    print($fh $d);
   }
   close($fh);
 
