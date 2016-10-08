@@ -656,6 +656,102 @@ sub torrent_infohash
 
 
 
+sub torrent_infohash_dechunk2_shift
+{
+  my ($string, $offset) = @_;
+  $$offset++;
+  die if($$offset > length($string));
+  return substr($string, $$offset-1, 1);
+}
+
+
+
+sub torrent_infohash_dechunk2
+{
+  my ($string, $offset, $at, $is, $ie) = @_;
+
+  my $item = torrent_infohash_dechunk2_shift($string, $offset);
+  if($item eq 'd')
+  {
+    $item = torrent_infohash_dechunk2_shift($string, $offset);
+    while($item ne 'e')
+    {
+      #unshift(@$chunks, $item);
+      $$offset--;
+      my $key = torrent_infohash_dechunk2($string, $offset);
+      if($key eq 'info' && $at eq '.')
+      {
+        $$is = $$offset;#scalar(@$chunks);
+      }
+
+      torrent_infohash_dechunk2($string, $offset, $at.'.'.$key, $is, $ie);
+
+      if($key eq 'info' && $at eq '.')
+      {
+        $$ie = $$offset;#scalar(@$chunks);
+      }
+
+      $item = torrent_infohash_dechunk2_shift($string, $offset);
+    }
+    return;
+  }
+
+  if($item eq 'l')
+  {
+    $item = torrent_infohash_dechunk2_shift($string, $offset);
+    while($item ne 'e')
+    {
+      #unshift(@$chunks, $item);
+      $$offset--;
+      torrent_infohash_dechunk2($string, $offset);
+      $item = torrent_infohash_dechunk2_shift($string, $offset);
+    }
+    return;
+  }
+
+  if($item eq 'i')
+  {
+    $item = torrent_infohash_dechunk2_shift($string, $offset);
+    while($item ne 'e')
+    {
+      $item = torrent_infohash_dechunk2_shift($string, $offset);
+    }
+    return;
+  }
+
+  if($item =~ /\d/)
+  {
+    my $num;
+    while($item =~ /\d/)
+    {
+      $num .= $item;
+      $item = torrent_infohash_dechunk2_shift($string, $offset);
+    }
+    my $key = substr($string, $$offset, $num);
+    $$offset += $num;
+    return $key;
+  }
+
+  die 'hmmm?';
+}
+
+
+sub torrent_infohash2
+{
+  my $string = shift;
+  my $offset = 0;
+  my $s = 0;
+  my $e = 0;
+
+  torrent_infohash_dechunk2($string, \$offset, '.', \$s, \$e);
+  return undef unless($s && $e);
+
+  if(wantarray) { return ($s, $e); }
+  return uc(Digest::SHA1::sha1_hex(substr($string, $s, $e-$s)));
+}
+
+
+
 sub ipaddr
 {
   my ($ip) = @_;
@@ -845,6 +941,39 @@ sub load
 
 
 
+sub tbd_load
+{
+  my ($db, $dbf) = @_;
+
+  my $fh;
+  open($fh, '<', $dbf) || die $!;
+  binmode($fh);
+  my $offsets;
+  my $r = sysread($fh, $offsets, 0x40000);
+  if($r != 0x40000) { die "offsets: want ".(0x40000).", got: $r, length: ".length($offsets); }
+  my @offsets = unpack('N' x 0x10000, $offsets);
+  foreach my $i0 (0..0xFF)
+  {
+    my $id0 = sprintf('%02X', $i0);
+    foreach my $i1 (0..0xFF)
+    {
+      my $o = $i0*0x100+$i1;
+      next unless($offsets[$o]);
+      my $id1 = sprintf('%02X', $i1);
+      my $d;
+      my $r = sysread($fh, $d, $offsets[$o]*20);
+      if($r != $offsets[$o]*20) { die "$id0/$id1 -> want: $offsets[$o], got: ".($r).", length: ".length($d); }
+      $db->{$id0.$id1} = $d;
+    }
+  }
+  if(read($fh, $offsets, 10_000_000)) { die "there is ".length($offsets)." left but shouldnt in ".$dbf; }
+  close($fh);
+
+  return 'loaded';
+}
+
+
+
 sub save
 {
   my $self = shift();
@@ -889,18 +1018,28 @@ sub save
   }
   close($fh);
 
-  if(-f $self->{dbf})
+  for(1..180)
   {
+    last if(!-f $self->{dbf});
     #warn 'exists '.$self->{dbf};
     if(-f $self->{dbf}.'.old') { unlink($self->{dbf}.'.old') || die $!; }
-    rename($self->{dbf}, $self->{dbf}.'.old') || die $!;
+    if(!rename($self->{dbf}, $self->{dbf}.'.old'))
+    {
+      warn $!;
+      sleep(10);
+    }
   }
-  for(1..20)
+
+  ### someone is locking the file ###
+  for(1..180)
   {
-    last if !-f $self->{dbf}.'.new';
+    last if(!-f $self->{dbf}.'.new');
     #warn 'new there '.$self->{dbf};
-    rename($self->{dbf}.'.new', $self->{dbf}) || warn $!;
-    sleep(10);
+    if(!rename($self->{dbf}.'.new', $self->{dbf}))
+    {
+      warn $!;
+      sleep(10);
+    }
   }
   if(-f $self->{dbf}.'.new') { die "new still there"; }
   unlink($self->{dbf}.'.old');
@@ -1038,6 +1177,46 @@ sub sid
   }
 
   #return (hex(unpack('H4', $tidp)) << 16) + $i / 40;
+  return (hex(unpack('H4', $tidp)) << 16) + $i / 20;
+}
+
+
+sub tdb_sid
+{
+  my ($db, $tid) = @_;
+  my $tidp;
+
+  if(length($tid) == 20)
+  {
+    $tidp = $tid;
+    $tid = uc(unpack('H*', $tidp));
+  }
+  elsif($tid =~ /^([0-9A-F]{40})$/)
+  {
+    $tid = $1; ### could have \n at the end
+    $tidp = pack('H*', $tid);
+  }
+  else
+  {
+    warn "invalid id $tid";
+    return undef;
+  }
+
+
+  my $id0 = substr($tid, 0, 2);
+  my $id1 = substr($tid, 2, 2);
+  my $i = 0;
+  while($i = index($db->{$id0.$id1}, $tidp, $i))
+  {
+    last if($i == -1);
+    last if($i % 20 == 0);
+    $i++;
+  }
+  if($i == -1)
+  {
+    return undef;
+  }
+
   return (hex(unpack('H4', $tidp)) << 16) + $i / 20;
 }
 
