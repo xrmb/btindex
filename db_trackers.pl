@@ -4,6 +4,7 @@
 use LWP;
 use Compress::Zlib;
 use Term::ReadKey;
+use IO::Uncompress::Gunzip;
 
 use lib (__FILE__.'/..');
 use btindex;
@@ -36,32 +37,31 @@ TRACKER: foreach my $url (
                   'http://tracker.sktorrent.net/full_scrape_not_a_tracker.tar.gz'
                 )
 {
-  next if($ARGV[0] && $url !~ $ARGV[0]);
-
-  my $out = $config->{temp}.'/data';
-
-  if($ARGV[0] ne '.')
+  my $cmd = "wgetw $url -O - -T 10 -q";
+  if($ARGV[0])
   {
-    unlink($out); ### possible leftovers
-    if($url =~ /\.gz$/) { $out .= '.gz'; }
-    unlink($out);
-    system(qq|wget $url -O $out -T 10|);
-
-    next unless(-f $out);
-
-    if($url =~ /\.gz$/)
-    {
-      system("gzip -d $out");
-      $out =~ s/.gz$//;
-    }
+    $cmd = "cat $ARGV[0]";
   }
 
-  open(my $fh, '<', $out) || next;
-  read($fh, my $data, 400_000_000) || next;
-  close($fh);
-  if($ARGV[0] ne '.') { unlink($out); }
+  warn $cmd;
+  open(my $fh, '-|', $cmd) || next;
+  my $gz;
+  if($url =~ /\.gz$/)
+  {
+    $gz = IO::Uncompress::Gunzip->new($fh);
+  }
 
-  if(substr($data, 0, 1000) =~ /:\d+:\d+\n/)
+  my $data;
+  if($gz)
+  {
+    if($gz->read($data, 0x10000) != 0x10000) { next; }
+  }
+  else
+  {
+    if(read($fh, $data, 0x10000) != 0x10000) { next; }
+  }
+
+  if($data =~ /:\d+:\d+\n/)
   {
     my $i = -1;
     my $l = $i;
@@ -98,6 +98,30 @@ TRACKER: foreach my $url (
 
       if($cc) { $dbc->sid($tid, add => \$added); }
       if($ic) { $dbi->sid($tid, add => \$added); }
+
+      if($fh && $i > length($data)-1000)
+      {
+        my $ndata;
+        my $read;
+
+        if($gz)
+        {
+          $read = $gz->read($ndata, 0x10000);
+        }
+        else
+        {
+          $read = read($fh, $ndata, 0x10000);
+        }
+
+        if($read != 0x10000)
+        {
+          if($gz) { $gz->close(); $gz = undef; }
+          close($fh);
+          $fh = undef;
+        }
+        $data = substr($data, $i).$ndata;
+        $i = 0;
+      }
 
       $l = $i;
     }
@@ -136,8 +160,32 @@ TRACKER: foreach my $url (
 
       if($cc) { $dbc->sid($tid, add => \$added); }
       if($ic) { $dbi->sid($tid, add => \$added); }
+
+      if($fh && $i > length($data)-1000)
+      {
+        my $ndata;
+        my $read;
+
+        if($gz)
+        {
+          $read = $gz->read($ndata, 0x10000);
+        }
+        else
+        {
+          $read = read($fh, $ndata, 0x10000);
+        }
+
+        if($read != 0x10000)
+        {
+          if($gz) { $gz->close(); $gz = undef; }
+          close($fh);
+          $fh = undef;
+        }
+        $data = substr($data, $i).$ndata;
+        $i = 0;
+      }
     }
   }
 
-  last if($ARGV[0] eq '.');
+  last if($ARGV[0]);
 }
