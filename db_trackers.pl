@@ -18,11 +18,11 @@ if($ARGV[0] eq 'delete') { exit system(qq|schtasks /delete /tn "$ARGV[1]\\btinde
 my @ts = localtime();
 my $config = btindex::config();
 
+my $db = new btindex::tdb(file => __FILE__.'/../dbs/trackers', save => 10_000_000);
 my $dbc = new btindex::tdb(file => __FILE__.'/../dbs/trackers_c', save => 10_000_000);
 my $dbi = new btindex::tdb(file => __FILE__.'/../dbs/trackers_i', save => 10_000_000);
 my $dbn = new btindex::tdb(file => __FILE__.'/../dbs/trackers_n', save => 10_000_000);
 my $dbnd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_n_%04d%02d%02d', $ts[5]+1900, $ts[4]+1, $ts[3]), save => 10_000_000);
-my $db = new btindex::tdb(file => __FILE__.'/../dbs/trackers', save => 10_000_000);
 
 $dbc->clear();
 $dbi->clear();
