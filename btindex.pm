@@ -738,12 +738,99 @@ sub torrent_infohash_dechunk2
 
 sub torrent_infohash2
 {
-  my $string = shift;
+  my $string = shift();
   my $offset = 0;
   my $s = 0;
   my $e = 0;
 
   torrent_infohash_dechunk2($string, \$offset, '.', \$s, \$e);
+  return undef unless($s && $e);
+
+  if(wantarray) { return ($s, $e); }
+  return uc(Digest::SHA1::sha1_hex(substr($string, $s, $e-$s)));
+}
+
+
+
+
+sub torrent_infohash_dechunk3
+{
+  my ($string, $offset, $at, $is, $ie) = @_;
+
+  my $item = substr($string, $$offset++, 1);
+  if($item eq 'd')
+  {
+    $item = substr($string, $$offset++, 1);
+    while($item ne 'e')
+    {
+      #unshift(@$chunks, $item);
+      $$offset--;
+      my $key = torrent_infohash_dechunk3($string, $offset);
+      if($key eq 'info' && $at eq '.')
+      {
+        $$is = $$offset;#scalar(@$chunks);
+      }
+
+      torrent_infohash_dechunk3($string, $offset, $at.'.'.$key, $is, $ie);
+
+      if($key eq 'info' && $at eq '.')
+      {
+        $$ie = $$offset;#scalar(@$chunks);
+      }
+
+      $item = substr($string, $$offset++, 1);
+    }
+    return;
+  }
+
+  if($item eq 'l')
+  {
+    $item = substr($string, $$offset++, 1);
+    while($item ne 'e')
+    {
+      #unshift(@$chunks, $item);
+      $$offset--;
+      torrent_infohash_dechunk3($string, $offset);
+      $item = substr($string, $$offset++, 1);
+    }
+    return;
+  }
+
+  if($item eq 'i')
+  {
+    $item = substr($string, $$offset++, 1);
+    while($item ne 'e')
+    {
+      $item = substr($string, $$offset++, 1);
+    }
+    return;
+  }
+
+  if($item =~ /\d/)
+  {
+    my $num;
+    while($item =~ /\d/)
+    {
+      $num .= $item;
+      $item = substr($string, $$offset++, 1);
+    }
+    my $key = substr($string, $$offset, $num);
+    $$offset += $num;
+    return $key;
+  }
+
+  die 'hmmm?';
+}
+
+
+sub torrent_infohash3
+{
+  my $string = shift();
+  my $offset = 0;
+  my $s = 0;
+  my $e = 0;
+
+  torrent_infohash_dechunk3($string, \$offset, '.', \$s, \$e);
   return undef unless($s && $e);
 
   if(wantarray) { return ($s, $e); }
