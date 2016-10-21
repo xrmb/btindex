@@ -105,10 +105,9 @@ MAIN: for(;;)
   foreach my $t (grep { /\.(tor|torrent)$/i } readdir($dh))
   {
     my $s = $config->{tixati_torrents}.'/'.$t;
-    next if -s $s > 2_000_000;
     my $tc = read_file($s) || next;
 
-    my $ih = btindex::torrent_infohash2($tc);
+    my $ih = btindex::torrent_infohash3($tc);
     if(!$ih)
     {
       print("cant hash $s\n");
