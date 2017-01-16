@@ -159,7 +159,7 @@ sub read_file
 
 
 
-sub write_file
+sub write_file($$)
 {
   my ($f, $d) = @_;
 
@@ -178,6 +178,15 @@ sub write_file
   close($fh);
 
   return $d;
+}
+
+
+
+sub torrent_path($)
+{
+  my ($hash) = @_;
+  $hash = uc($hash);
+  return sprintf('%s/%s/%s/%s', config('torrents'), substr($hash, 0, 2), substr($hash, 2, 2), $hash);
 }
 
 
