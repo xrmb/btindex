@@ -63,6 +63,8 @@ TRACKER: foreach my $url (
 
   if($data =~ /:\d+:\d+\n/)
   {
+    print("parsing mode: 1\n");
+
     my $i = -1;
     my $l = $i;
     my $c = 0;
@@ -128,6 +130,8 @@ TRACKER: foreach my $url (
   }
   else
   {
+    print("parsing mode: 2\n");
+
     my $i = -1;
     my $c = 0;
     my $ac = 0;
