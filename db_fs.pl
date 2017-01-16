@@ -23,15 +23,20 @@ foreach_torrent(
     my $tid = (split('/', $tf))[-1];
     my $idg = $dbg->sid($tid);
 
-    printf("%s\t%s\n", $tid, $idg ? 'dupe' : '');
+    printf("%s\t", $tid);
 
-    if($cleanup && $idg)
+    if($idg)
     {
-      unlink($tf);
+      print("dupe\n");
+      if($cleanup && $idg)
+      {
+        unlink($tf);
+      }
       next;
     }
 
-    my $idf = $dbf->sid($tid, add => 1);
+    my $idf = $dbf->sid($tid, add => \my $added);
 
+    printf("%s\n", $added ? 'new' : 'old');
     return;
   });
