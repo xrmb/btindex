@@ -1,3 +1,5 @@
+# type of computer (master|slave)
+type	slave
 # where are the torrents?
 torrents	d:\btindex\torrents
 # where is tixati storing the torrents
