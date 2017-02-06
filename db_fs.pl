@@ -7,6 +7,9 @@ use btindex;
 use strict;
 
 
+die "can only run on master" unless(btindex::config()->{type} eq 'master');
+
+
 GetOptions(cleanup => \my $cleanup) || die;
 
 
