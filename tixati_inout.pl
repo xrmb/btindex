@@ -15,16 +15,17 @@ use strict;
 $| = 1;
 my $config = btindex::config();
 
-my $db = 'rss';
+my $db = $config->{tixati_inout_db} || 'rss';
 my $start;
-my $random;
-GetOptions('db=s' => \$db, 'start=s' => \$start, random => \$random) || die;
+my $random = $config->{tixati_inout_random};
+my $inst = 1;
+GetOptions('db=s' => \$db, 'start=s' => \$start, random => \$random, 'inst=i' => \$inst) || die;
 
-my $db404 = new btindex::tdb(file => "dbs/$db");
+my $dbdo = new btindex::tdb(file => "dbs/$db");
 my $dbgot = new btindex::tdb(file => 'dbs/torrents_got');
 my $dbfs = new btindex::tdb(file => 'dbs/torrents_fs');
 
-if($start) { $db404->set_it_id($start); }
+if($start) { $dbdo->set_it_id($start); }
 
 my $con = new Win32::Console();
 
@@ -37,64 +38,67 @@ MAIN: for(;;)
   if((ReadKey(-1) || '') eq 'x') { print("x-key\n"); last MAIN; }
 
   my $tl = `tasklist /FI "SESSION eq $session"`;
-  if($tl !~ /tixati.exe/i)
+  foreach my $ic (1..$inst)
   {
-    print("starting tixati ($session)...\n");
-    system("start \"wtf ms\" /min \"c:\\Program Files\\tixati\\tixati.exe\"");
-    sleep(10);
-  }
-
-  my $add;
-  my $t = tixati_transfers();
-  if(!$t) { sleep(5); next; }
-
-  $add = $tatat - scalar(@$t);
-
-  ### delete "done" ###
-  foreach my $i (grep { $_->{mode} eq 'offline'} @$t)
-  {
-    my $r = tixati_transfer_delete($i->{id});
-    #printf("done\t%s: %d\n", $i->{id}, $r);
-    $add++;
-  }
-
-  ### delete "first" ###
-  my $top = int(0.05*$tatat);
-  if(@$t > $tatat - $top)
-  {
-    foreach my $i (@$t)
+    if($tl !~ /tixati_$ic.exe/i)
     {
-      my $r = tixati_transfer_delete($i->{id});
-      sleep(1);
-      #my ($code, $content) = tixati_transfer_delete($i->{id});
-      #printf("first\t%s: %d\n", $i->{id}, $r);
+      print("starting tixati ($session)...\n");
+      system("start \"wtf ms\" /min \"c:\\Program Files\\tixati\\$ic\\tixati_$ic.exe\"");
+      sleep(10);
+    }
+
+    my $add;
+    my $t = tixati_transfers($ic);
+    if(!$t) { sleep(5); next; }
+
+    $add = $tatat - scalar(@$t);
+
+    ### delete "done" ###
+    foreach my $i (grep { $_->{mode} eq 'offline'} @$t)
+    {
+      my $r = tixati_transfer_delete($ic, $i->{id});
+      #printf("done\t%s: %d\n", $i->{id}, $r);
       $add++;
-      $tadd++;
-      $top--;
-      last if($top == 0);
     }
-  }
 
-  if($add <= 0) { sleep(10); next; }
-
-  while(defined(my $tid = ($random ? $db404->random_id() : $db404->it_id())))
-  {
-    if(defined($dbfs->sid($tid))) { next; }
-    if(defined($dbgot->sid($tid))) { next; }
-    if(-f sprintf("%s/%s/%s/%s", $config->{torrents}, substr($tid, 0, 2), substr($tid, 2, 2), $tid)) { next; }
-
-    sleep(1);
-    my ($code, $content) = tixati_transfer_add($tid);
-    if($code == 200)
+    ### delete "first" ###
+    my $top = int(0.05*$tatat);
+    if(@$t > $tatat - $top)
     {
-    }
-    else
-    {
-      printf("add\t%s: %d\n%s\n", $tid, $code, $content);
+      foreach my $i (@$t)
+      {
+        my $r = tixati_transfer_delete($ic, $i->{id});
+        sleep(1);
+        #my ($code, $content) = tixati_transfer_delete($ic, $i->{id});
+        #printf("first\t%s: %d\n", $i->{id}, $r);
+        $add++;
+        $tadd++;
+        $top--;
+        last if($top == 0);
+      }
     }
 
-    $add--;
-    if($add == 0) { last; }
+    if($add <= 0) { sleep(10); next; }
+
+    while(defined(my $tid = ($random ? $dbdo->random_id() : $dbdo->it_id())))
+    {
+      if(defined($dbfs->sid($tid))) { next; }
+      if(defined($dbgot->sid($tid))) { next; }
+      if(-f sprintf("%s/%s/%s/%s", $config->{torrents}, substr($tid, 0, 2), substr($tid, 2, 2), $tid)) { next; }
+
+      sleep(1);
+      my ($code, $content) = tixati_transfer_add($ic, $tid);
+      if($code == 200)
+      {
+      }
+      else
+      {
+        printf("add\t%s: %d\n%s\n", $tid, $code, $content);
+      }
+
+      $add--;
+      if($add == 0) { last; }
+    }
   }
 
 
@@ -115,7 +119,7 @@ MAIN: for(;;)
     }
     $ih = uc($ih);
     my $d = sprintf("%s/%s/%s/%s", $config->{torrents}, substr($ih, 0, 2), substr($ih, 2, 2), $ih);
-    printf("%s <- %s\n", $d, $s);
+    printf("%s %s %s\n", scalar(localtime), $ih, $s);
     write_file($d, $tc);
     unlink($s);
     $tdone++;
