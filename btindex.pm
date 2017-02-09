@@ -953,6 +953,82 @@ sub tixati_transfer_add
 ###################################################################################################
 ###################################################################################################
 ###################################################################################################
+package btindex::tdbd;
+
+use File::Spec;
+
+
+sub new
+{
+  my $class = shift();
+  my $self  = {};
+  bless($self, $class);
+  my %args = @_;
+
+  $self->{dbf} = File::Spec->rel2abs($args{file}) || die 'need file';
+  $self->{fh} = undef;
+  $self->{buffer} = undef;
+  $self->{at} = undef;
+
+  return $self;
+}
+
+
+
+sub DESTROY
+{
+  my $self = shift();
+  if($self->{fh}) { close($self->{fh}); }
+}
+
+
+
+sub load
+{
+  my $self = shift();
+
+  return if($self->{fh});
+
+  open(my $fh, '<', $self->{dbf}) || die $!;
+  binmode($fh);
+
+  my $offsets;
+  my $r = sysread($fh, $offsets, 0x40000);
+  if($r != 0x40000) { die "offsets: want ".(0x40000).", got: $r, length: ".length($offsets); }
+
+  $self->{fh} = $fh;
+  $self->{at} = 0;
+}
+
+
+
+sub it_id
+{
+  my $self = shift();
+
+  $self->load();
+
+  if($self->{at}*20 >= length($self->{buffer}))
+  {
+    $self->{at} = 0;
+    my $r = sysread($self->{fh}, $self->{buffer}, 20*100000);
+    return undef if($r == 0);
+  }
+
+  my $id = uc(unpack('H*', substr($self->{buffer}, $self->{at}*20, 20)));
+
+  $self->{at}++;
+
+  return $id;
+}
+
+1;
+
+
+
+###################################################################################################
+###################################################################################################
+###################################################################################################
 package btindex::tdb;
 
 use File::Spec;
