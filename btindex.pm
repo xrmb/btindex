@@ -883,17 +883,20 @@ my $tixati_ua = sub
     $tixati_ua_o = LWP::UserAgent->new;
     $tixati_ua_o->timeout(10);
 
-    $tixati_ua_o->credentials('127.0.0.1:8888', 'Tixati Web Interface', 'a', 'a');
+    $tixati_ua_o->credentials('127.0.0.1:8889', 'Tixati Web Interface', 'a', 'a');
   }
   return $tixati_ua_o;
 };
 
 
+
 sub tixati_transfers
 {
+  my ($inst) = @_;
+
   my $ua = $tixati_ua->();
 
-  my $res = $ua->get('http://127.0.0.1:8888/transfers');
+  my $res = $ua->get(sprintf('http://127.0.0.1:%d/transfers', 8888+$inst));
   return undef if($res->code() != 200);
 
   my @i;
@@ -921,11 +924,11 @@ sub tixati_transfers
 
 sub tixati_transfer_delete
 {
-  my ($id) = @_;
+  my ($inst, $id) = @_;
 
   my $ua = $tixati_ua->();
 
-  my $res = $ua->post('http://127.0.0.1:8888/transfers/action', [
+  my $res = $ua->post(sprintf('http://127.0.0.1:%d/transfers/action', 8888+$inst), [
     $id         => 1,
     deleteconf  => 1]);
 
@@ -933,13 +936,14 @@ sub tixati_transfer_delete
 }
 
 
+
 sub tixati_transfer_add
 {
-  my ($tid) = @_;
+  my ($inst, $tid) = @_;
 
   my $ua = $tixati_ua->();
 
-  my $res = $ua->post('http://127.0.0.1:8888/transfers/action', [
+  my $res = $ua->post(sprintf('http://127.0.0.1:%d/transfers/action', 8888+$inst), [
     addlinktext	=> $tid,
     addlink	=> 'Add',
     noautostart	=> '1']);
@@ -947,7 +951,10 @@ sub tixati_transfer_add
   return wantarray ? ($res->code(), $res->decoded_content()) : $res->code();
 }
 
+
+
 1;
+
 
 
 ###################################################################################################

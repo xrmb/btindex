@@ -13,11 +13,13 @@ die "can only run on master" unless(btindex::config()->{type} eq 'master');
 GetOptions(cleanup => \my $cleanup) || die;
 
 
-my $dbf = new btindex::tdb(file => 'dbs/torrents_fs', save => 1_000_000);
+my $dbfo = new btindex::tdb(file => 'dbs/torrents_fs', save => -1);
+my $dbfn = new btindex::tdb(file => 'dbs/torrents_fs', save => 1_000_000);
 my $dbg = new btindex::tdb(file => 'dbs/torrents_got');
-$dbf->clear();
+$dbfn->clear();
 
-
+my $files = 0;
+my $size = 0;
 foreach_torrent(
   sub
   {
@@ -25,6 +27,9 @@ foreach_torrent(
 
     my $tid = (split('/', $tf))[-1];
     my $idg = $dbg->sid($tid);
+
+    $files++;
+    $size += -s $tf;
 
     printf("%s\t", $tid);
 
@@ -38,8 +43,9 @@ foreach_torrent(
       next;
     }
 
-    my $idf = $dbf->sid($tid, add => \my $added);
+    my $idfo = $dbfo->sid($tid);
+    my $idfn = $dbfn->sid($tid, add => \my $added);
 
-    printf("%s\n", $added ? 'new' : 'old');
+    printf("%s\t%d files\t%1.f mb\n", $idfo ? 'old' : 'new', $files, $size/1024/1024);
     return;
   });
