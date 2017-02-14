@@ -21,9 +21,11 @@ my $random = $config->{tixati_inout_random};
 my $inst = 1;
 GetOptions('db=s' => \$db, 'start=s' => \$start, random => \$random, 'inst=i' => \$inst) || die;
 
-my $dbdo = new btindex::tdb(file => "dbs/$db");
-my $dbgot = new btindex::tdb(file => 'dbs/torrents_got');
-my $dbfs = new btindex::tdb(file => 'dbs/torrents_fs');
+warn $db;
+die unless(-f __FILE__."/../dbs/$db");
+my $dbdo = new btindex::tdb(file => __FILE__."/../dbs/$db");
+my $dbgot = new btindex::tdb(file => __FILE__.'/../dbs/torrents_got');
+my $dbfs = new btindex::tdb(file => __FILE__.'/../dbs/torrents_fs');
 
 if($start) { $dbdo->set_it_id($start); }
 
@@ -48,7 +50,8 @@ MAIN: for(;;)
     }
 
     my $add;
-    my $t = tixati_transfers($ic);
+    my ($code, $t) = tixati_transfers($ic);
+    if($code != 200) { printf("transfers\t%d\n", $code); sleep(5); next; }
     if(!$t) { sleep(5); next; }
 
     $add = $tatat - scalar(@$t);
@@ -93,7 +96,7 @@ MAIN: for(;;)
       }
       else
       {
-        printf("add\t%s: %d\n%s\n", $tid, $code, $content);
+        printf("add\t%s: %d\n", $tid, $code);
       }
 
       $add--;
