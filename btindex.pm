@@ -897,7 +897,7 @@ sub tixati_transfers
   my $ua = $tixati_ua->();
 
   my $res = $ua->get(sprintf('http://127.0.0.1:%d/transfers', 8888+$inst));
-  return undef if($res->code() != 200);
+  return ($res->code(), undef) if($res->code() != 200);
 
   my @i;
   my $c = $res->content();
@@ -917,7 +917,7 @@ sub tixati_transfers
     #printf("%d\t%s %s\n", scalar(@i), $i->{id}, substr($i->{name}, 0, 20));
   }
 
-  return \@i;
+  return ($res->code(), \@i);
 }
 
 
