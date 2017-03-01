@@ -21,7 +21,6 @@ my $random = $config->{tixati_inout_random};
 my $inst = 1;
 GetOptions('db=s' => \$db, 'start=s' => \$start, random => \$random, 'inst=i' => \$inst) || die;
 
-warn $db;
 die unless(-f __FILE__."/../dbs/$db");
 my $dbdo = new btindex::tdb(file => __FILE__."/../dbs/$db");
 my $dbgot = new btindex::tdb(file => __FILE__.'/../dbs/torrents_got');
@@ -51,7 +50,7 @@ MAIN: for(;;)
 
     my $add;
     my ($code, $t) = tixati_transfers($ic);
-    if($code != 200) { printf("transfers\t%d\n", $code); sleep(5); next; }
+    if($code != 200) { printf("%d: transfers\t%d\n", $ic, $code); sleep(5); next; }
     if(!$t) { sleep(5); next; }
 
     $add = $tatat - scalar(@$t);
@@ -96,7 +95,7 @@ MAIN: for(;;)
       }
       else
       {
-        printf("add\t%s: %d\n", $tid, $code);
+        printf("%d: add\t%s: %d\n", $ic, $tid, $code);
       }
 
       $add--;
@@ -135,7 +134,7 @@ MAIN: for(;;)
 
   for(1..15)
   {
-    $con->Title(sprintf("%d of %d%s", $tdone, $tadd, '.' x $_));
+    $con->Title(sprintf("%d of %d%s (%s)", $tdone, $tadd, '.' x $_, $db));
     if((ReadKey(-1) || '') eq 'x') { print("x-key\n"); last MAIN; }
     sleep(1);
   }
