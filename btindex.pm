@@ -1501,19 +1501,20 @@ sub random_id
   $self->load();
   return if(!exists($self->{db}));
 
+  my $noluck = 0;
   for(;;)
   {
+    if($noluck > 10000) { die "no luck?"; }
     my $r0 = int(rand(256));
     my $id0 = sprintf('%02X', $r0);
-    next if(!$self->{db}{$id0});
+    if(!$self->{db}{$id0}) { $noluck++; next; }
 
     my $r1 = int(rand(256));
     my $id1 = sprintf('%02X', $r1);
-    next if(!$self->{db}{$id0}{$id1});
+    if(!$self->{db}{$id0}{$id1}) { $noluck++; next; }
 
     #my $r2 = int(rand(length($self->{db}{$id0}{$id1}))/20);
     my $r2 = int(Math::Random::random_uniform_integer(1, 0, length($self->{db}{$id0}{$id1})) / 20);
-
 
     return $self->id(($r0 << 24) + ($r1 << 16) + $r2);
   }
