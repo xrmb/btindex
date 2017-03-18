@@ -25,6 +25,7 @@ my $dbi = new btindex::tdb(file => __FILE__.'/../dbs/trackers_i', save => 10_000
 my $dbn = new btindex::tdb(file => __FILE__.'/../dbs/trackers_n', save => 10_000_000);
 my $dbnd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_n_%04d%02d%02d', $ts[5]+1900, $ts[4]+1, $ts[3]), save => 10_000_000);
 my $dbcd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_c_%04d%02d%02d', $ts[5]+1900, $ts[4]+1, $ts[3]), save => 10_000_000);
+my $dbd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_%04d%02d%02d', $ts[5]+1900, $ts[4]+1, $ts[3]), save => 10_000_000);
 
 $dbc->clear();
 $dbi->clear();
@@ -89,6 +90,7 @@ TRACKER: foreach my $url (
       #printf("%s\t%d\t%d\t%d\t%d\n", $tid, $cc, $ic, $i, $l);
 
       my $added;
+      $dbd->sid($tid, add => 1);
       my $id = $db->sid($tid, add => \$added);
       if($added)
       {
@@ -153,6 +155,7 @@ TRACKER: foreach my $url (
       #printf("%s\t%d\t%d\n", $tid, $cc, $ic);
 
       my $added;
+      $dbd->sid($tid, add => 1);
       my $id = $db->sid($tid, add => \$added);
       if($added)
       {
