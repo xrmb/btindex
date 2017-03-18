@@ -1053,6 +1053,7 @@ sub new
   $self->{dbf} = File::Spec->rel2abs($args{file}) || die 'need file';
   $self->{save} = $args{save} || 0;
   $self->{db} = undef;
+  $self->{dbfc} = 0;
   $self->{dbfm} = 0;
   $self->{it} = undef;
 
@@ -1078,10 +1079,15 @@ sub load
 {
   my $self = shift();
 
-  if((!$self->{dirty} || $self->{save} < 0) && $self->{dbfm} && $self->{dbfm} != (stat($self->{dbf}))[9])
+  if($self->{dbfc} + 10 < time())
   {
-    printf("reloading %s...\n", $self->{dbf});
-    $self->{db} = undef;
+    $self->{dbfc} = time();
+
+    if((!$self->{dirty} || $self->{save} < 0) && $self->{dbfm} && $self->{dbfm} != (stat($self->{dbf}))[9])
+    {
+      printf("reloading %s (%d)...\n", $self->{dbf}, -s $self->{dbf});
+      $self->{db} = undef;
+    }
   }
 
   if($self->{db}) { return 'already loaded'; }
