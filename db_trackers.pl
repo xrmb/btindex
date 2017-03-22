@@ -5,6 +5,7 @@ use LWP;
 use Compress::Zlib;
 use Term::ReadKey;
 use IO::Uncompress::Gunzip;
+use Win32::SearchPath;
 
 use lib (__FILE__.'/..');
 use btindex;
@@ -12,9 +13,10 @@ use btindex;
 use strict;
 
 
-if($ARGV[0] eq 'create') { exit system(qq|schtasks /create /tn "$ARGV[1]\\btindex\\db_trackers" /st 00:00 /sc minute /mo 180 /tr "$^X |.Cwd::abs_path(__FILE__).qq|"|); }
+if($ARGV[0] eq 'create') { exit system(qq|schtasks /create /tn "$ARGV[1]\\btindex\\db_trackers" /st 00:00 /sc minute /mo 60 /tr "$^X |.Cwd::abs_path(__FILE__).qq|"|); }
 if($ARGV[0] eq 'delete') { exit system(qq|schtasks /delete /tn "$ARGV[1]\\btindex\\db_trackers"|); }
 
+my $wget = SearchPath('wgetw') || SearchPath('wget') || die 'where is wget?';
 
 my @ts = localtime();
 my $config = btindex::config();
@@ -38,7 +40,7 @@ TRACKER: foreach my $url (
                   'http://tracker.sktorrent.net/full_scrape_not_a_tracker.tar.gz'
                 )
 {
-  my $cmd = "wgetw $url -O - -T 10 -q";
+  my $cmd = "$wget $url -O - -T 10 -q";
   if($ARGV[0])
   {
     $cmd = "cat $ARGV[0]";
@@ -72,7 +74,7 @@ TRACKER: foreach my $url (
     my $ac = 0;
     while(($i = index($data, "\n", $i+1)) != -1)
     {
-      if((ReadKey(-1) || '') eq 'x') { last TRACKER; }
+      #if((ReadKey(-1) || '') eq 'x') { last TRACKER; }
 
       $c++;
 
@@ -138,7 +140,7 @@ TRACKER: foreach my $url (
     my $ac = 0;
     while(($i = index($data, 'd8:completei', $i+1)) != -1)
     {
-      if((ReadKey(-1) || '') eq 'x') { last TRACKER; }
+      #if((ReadKey(-1) || '') eq 'x') { last TRACKER; }
 
       $c++;
 
