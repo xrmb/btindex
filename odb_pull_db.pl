@@ -15,7 +15,7 @@ GetOptions('db=s' => \my $db);
 my $tdb = new btindex::tdb(file => "dbs/$db");
 
 my $config = btindex::config();
-my $dbh = DBI->connect($config->{odb}, $config->{odb_user}, $config->{odb_pass}) || die;
+my $dbh = DBI->connect($config->{odb}, $config->{odb_user}, $config->{odb_pass}, { mysql_auto_reconnect => 1 }) || die;
 
 my $offset = 0;
 for(;;)
@@ -24,11 +24,12 @@ for(;;)
   my $sth = $dbh->prepare($q) || die;
   $sth->execute($db) || die;
 
+  my $added;
   while(my $row = $sth->fetchrow_hashref())
   {
     $offset++;
 
-    $tdb->sid($row->{hash}, add => \my $added);
+    $tdb->sid($row->{hash}, add => \$added);
 
     printf("%s\t%s\n", $row->{hash}, $added ? 'new' : 'old');
   }

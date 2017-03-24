@@ -18,7 +18,7 @@ my $config = btindex::config();
 my $db = $config->{tixati_inout_db} || 'rss';
 my $start;
 my $random = $config->{tixati_inout_random};
-my $inst = 1;
+my $inst = $config->{tixati_inout_inst} || 1;
 GetOptions('db=s' => \$db, 'start=s' => \$start, random => \$random, 'inst=i' => \$inst) || die;
 
 die unless(-f __FILE__."/../dbs/$db");
@@ -43,7 +43,7 @@ MAIN: for(;;)
   {
     if($tl !~ /tixati_$ic.exe/i)
     {
-      print("starting tixati ($session)...\n");
+      print("starting tixati $ic (session $session)...\n");
       system("start \"wtf ms\" /min \"c:\\Program Files\\tixati\\$ic\\tixati_$ic.exe\"");
       sleep(10);
     }
