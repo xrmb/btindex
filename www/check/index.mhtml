@@ -1,0 +1,19 @@
+<%INIT>
+  use lib __FILE__.'/../../';
+  use btindex;
+
+  my $q = uc($ENV{QUERY_STRING});
+  unless($q =~ /^[0-9A-F]{40}$/)
+  {
+    $m->out('invalid hash');
+    $m->abort(404);
+  }
+
+  unless(-f sprintf('%s/%s/%s/%s', btindex::config('torrents'), substr($q, 0, 2), substr($q, 2, 2), $q))
+  {
+    $m->out('unknown');
+    $m->abort(404)
+  }
+
+  $m->out('known');
+</%INIT>
