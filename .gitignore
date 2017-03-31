@@ -3,3 +3,6 @@ data
 torrents
 config.dat
 make_torrents.exe
+
+www/btindex.pm
+www/config.dat

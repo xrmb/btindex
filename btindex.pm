@@ -1053,6 +1053,7 @@ sub new
   $self->{dbf} = File::Spec->rel2abs($args{file}) || die 'need file';
   $self->{save} = $args{save} || 0;
   $self->{db} = undef;
+  $self->{dbfc} = 0;
   $self->{dbfm} = 0;
   $self->{it} = undef;
 
@@ -1078,10 +1079,15 @@ sub load
 {
   my $self = shift();
 
-  if((!$self->{dirty} || $self->{save} < 0) && $self->{dbfm} && $self->{dbfm} != (stat($self->{dbf}))[9])
+  if($self->{dbfc} + 10 < time())
   {
-    printf("reloading %s...\n", $self->{dbf});
-    $self->{db} = undef;
+    $self->{dbfc} = time();
+
+    if((!$self->{dirty} || $self->{save} < 0) && $self->{dbfm} && $self->{dbfm} != (stat($self->{dbf}))[9])
+    {
+      printf("reloading %s (%d)...\n", $self->{dbf}, -s $self->{dbf});
+      $self->{db} = undef;
+    }
   }
 
   if($self->{db}) { return 'already loaded'; }
@@ -1089,6 +1095,7 @@ sub load
   if(!-f $self->{dbf}) { return 'no dbf'; }
   $self->{db} = {};
 
+  ### todo: .new is now .new$$ ###
   if(-f $self->{dbf}.'.new') { die "a new db is present ($self->{dbf})"; }
 
   my $offsets;
@@ -1181,7 +1188,7 @@ sub save
   }
 
   my $fh;
-  open($fh, '>', $self->{dbf}.'.new') || die "fopen: $! / ".$self->{dbf}.'.new';
+  open($fh, '>', $self->{dbf}.".new$$") || die "fopen: $! / ".$self->{dbf}.".new$$";
   binmode($fh);
   my $tc = 0;
   my $d = '';
@@ -1229,15 +1236,15 @@ sub save
   ### someone is locking the file ###
   for(1..180)
   {
-    last if(!-f $self->{dbf}.'.new');
+    last if(!-f $self->{dbf}.".new$$");
     #warn 'new there '.$self->{dbf};
-    if(!rename($self->{dbf}.'.new', $self->{dbf}))
+    if(!rename($self->{dbf}.".new$$", $self->{dbf}))
     {
       warn $!;
       sleep(10);
     }
   }
-  if(-f $self->{dbf}.'.new') { die "new still there"; }
+  if(-f $self->{dbf}.".new$$") { die "new still there"; }
   unlink($self->{dbf}.'.old');
 
   $self->{dirty} = 0;
