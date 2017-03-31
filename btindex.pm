@@ -1090,13 +1090,24 @@ sub load
   $self->{db} = {};
 
   if(-f $self->{dbf}.'.new') { die "a new db is present ($self->{dbf})"; }
-  my $fh;
-  open($fh, '<', $self->{dbf}) || die $!;
-  binmode($fh);
+
   my $offsets;
-  my $r = sysread($fh, $offsets, 0x40000);
-  if($r != 0x40000) { die "offsets: want ".(0x40000).", got: $r, length: ".length($offsets); }
-  my @offsets = unpack('N' x 0x10000, $offsets);
+  my @offsets;
+  my $fh;
+  for(;;)
+  {
+    open($fh, '<', $self->{dbf}) || die $!;
+    binmode($fh);
+    my $r = sysread($fh, $offsets, 0x40000);
+    if($r != 0x40000) { die "offsets: want ".(0x40000).", got: $r, length: ".length($offsets); }
+    @offsets = unpack('N' x 0x10000, $offsets);
+
+    last if(grep { $_ } @offsets);
+
+    warn("no offsets in $self->{dbf}?");
+    sleep(10);
+  }
+
   foreach my $i0 (0..0xFF)
   {
     my $id0 = sprintf('%02X', $i0);
@@ -1504,7 +1515,7 @@ sub random_id
   my $noluck = 0;
   for(;;)
   {
-    if($noluck > 10000) { die "no luck?"; }
+    if($noluck > 10000) { die localtime.": no luck? ".join(',', keys(%{$self->{db}})); }
     my $r0 = int(rand(256));
     my $id0 = sprintf('%02X', $r0);
     if(!$self->{db}{$id0}) { $noluck++; next; }
