@@ -1095,7 +1095,10 @@ sub load
   if(!-f $self->{dbf}) { return 'no dbf'; }
   $self->{db} = {};
 
+  ### todo: .new is now .new$$ ###
   if(-f $self->{dbf}.'.new') { die "a new db is present ($self->{dbf})"; }
+
+
   my $fh;
   open($fh, '<', $self->{dbf}) || die $!;
   binmode($fh);
@@ -1176,7 +1179,7 @@ sub save
   }
 
   my $fh;
-  open($fh, '>', $self->{dbf}.'.new') || die "fopen: $! / ".$self->{dbf}.'.new';
+  open($fh, '>', $self->{dbf}.".new$$") || die "fopen: $! / ".$self->{dbf}.".new$$";
   binmode($fh);
   my $tc = 0;
   my $d = '';
@@ -1224,15 +1227,15 @@ sub save
   ### someone is locking the file ###
   for(1..180)
   {
-    last if(!-f $self->{dbf}.'.new');
+    last if(!-f $self->{dbf}.".new$$");
     #warn 'new there '.$self->{dbf};
-    if(!rename($self->{dbf}.'.new', $self->{dbf}))
+    if(!rename($self->{dbf}.".new$$", $self->{dbf}))
     {
       warn $!;
       sleep(10);
     }
   }
-  if(-f $self->{dbf}.'.new') { die "new still there"; }
+  if(-f $self->{dbf}.".new$$") { die "new still there"; }
   unlink($self->{dbf}.'.old');
 
   $self->{dirty} = 0;
