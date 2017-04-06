@@ -7,18 +7,22 @@ our @EXPORT = qw(foreach_log logs foreach_torrent foreach_logentry mybdecode rea
                  tixati_transfers tixati_transfer_delete tixati_transfer_add);
 our @EXPORT_OK = @EXPORT;
 
+use threads;
+use threads::shared;
+
 use Convert::Bencode_XS;
 use Archive::Zip;
 use File::Path qw(make_path);
 use Digest::SHA1;
 use LWP;
-use Win32::Process::Info;
+#use Win32::Process::Info; ### not thread safe
 use Math::Random;
+use IO::Socket::SSL; IO::Socket::SSL->VERSION(1.42); ### this seems to make any initial https communication faster
 
 use strict;
 
 
-my $config;
+my $config :shared;
 sub config
 {
   my ($key, $default) = @_;
@@ -27,13 +31,13 @@ sub config
     my $fh;
     if(open($fh, '<', __FILE__.'/../config.dat'))
     {
-      $config = { split(/[\t\n\r]+/, join('', grep { /^[^;#]/ } <$fh>)) };
+      $config = shared_clone({ split(/[\t\n\r]+/, join('', grep { /^[^;#]/ } <$fh>)) });
       close($fh);
     }
     else
     {
       warn('cant open config.dat');
-      $config = {};
+      $config = shared_clone({});
     }
   }
 
@@ -45,6 +49,9 @@ sub config
 
 sub launched_by
 {
+  warn 'dont use me';
+  return;
+
   my $pihandle = Win32::Process::Info->new();
   my @procinfo = $pihandle->GetProcInfo();
 
@@ -281,7 +288,7 @@ sub foreach_torrent
           if($args{mtime} && (stat("torrents/$l1/$l2.zip"))[9] < $args{mtime}) { next; }
 
           my $zip = Archive::Zip->new();
-          if($zip->read("torrents/$l1/$l2.zip") != Archive::Zip::AZ_OK) { die $!; }
+          if($zip->read("torrents/$l1/$l2.zip") != 0) { die $!; } # Archive::Zip::AZ_OK
           foreach my $m (sort { $a->fileName() cmp $b->fileName() } grep { $_->fileName() =~ m!^[0-9A-F]{40}$! } $zip->members())
           {
             if($args{start} && $m->fileName() lt $args{start}) { next; }
@@ -354,7 +361,7 @@ sub foreach_torrent
       if($args{data})
       {
         my $zip = Archive::Zip->new();
-        if($zip->read("torrents/$l1") != Archive::Zip::AZ_OK) { die $!; }
+        if($zip->read("torrents/$l1") != 0) { die $!; } # Archive::Zip::AZ_OK
         foreach my $m (sort { $a->fileName() cmp $b->fileName() } grep { !$_->isDirectory() && $_->fileName() =~ m!^[0-9A-F]{2}/[0-9A-F]{40}$! } $zip->members())
         {
           if($args{start} && substr($m->fileName(), 3) lt $args{start}) { next; }
