@@ -159,9 +159,9 @@ sub read_file
 
 
 
-sub write_file($$)
+sub write_file #($$;$)
 {
-  my ($f, $d) = @_;
+  my ($f, $d, $t) = @_;
 
   my $dir = $f;
   $dir =~ s![\/\\][^\/\\]+$!!;
@@ -176,6 +176,8 @@ sub write_file($$)
   binmode($fh);
   print($fh $d);
   close($fh);
+
+  if($t) { utime($t, $t, $f); }
 
   return $d;
 }
