@@ -14,9 +14,6 @@ use strict;
 
 $| = 1;
 
-warn time;
-use IO::Socket::SSL; IO::Socket::SSL->VERSION(1.42);
-warn time;
 
 my $webapi = btindex::config('webapi') || die 'setup webapi in config';
 
