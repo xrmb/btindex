@@ -198,18 +198,28 @@ sub foreach_torrent
 
   my $r = 0;
   my $tdir = config('torrents');
+
   opendir(my $dh1, $tdir) || die "$! ($tdir)";
-  L1: foreach my $l1 (sort grep { /^[0-9A-F]{2}$/ } readdir($dh1))
+  my @l1 = sort grep { /^[0-9A-F]{2}$/ } readdir($dh1);
+  closedir($dh1);
+
+  L1: foreach my $l1 (@l1)
   {
     if($args{start} && $l1 lt substr($args{start}, 0, 2)) { next; }
 
     opendir(my $dh2, "$tdir/$l1") || die $!;
-    foreach my $l2 (sort grep { /^[0-9A-F]{2}$/ } readdir($dh2))
+    my @l2 = sort grep { /^[0-9A-F]{2}$/ } readdir($dh2);
+    closedir($dh2);
+
+    foreach my $l2 (@l2)
     {
       if($args{start} && "$l1$l2" lt substr($args{start}, 0, 4)) { next; }
 
       opendir(my $dh3, "$tdir/$l1/$l2") || die $!;
-      foreach my $l3 (sort grep { /^[0-9A-F]{40}$/ } readdir($dh3))
+      my @l3 = sort grep { /^[0-9A-F]{40}$/ } readdir($dh3);
+      closedir($dh3);
+
+      foreach my $l3 (@l3)
       {
         if($args{start} && $l3 lt $args{start}) { next; }
         if($args{end} && $l3 gt $args{end}) { last L1; }
@@ -251,13 +261,10 @@ sub foreach_torrent
           if($r) { last; }
         }
       }
-      closedir($dh3);
       if($r) { last; }
     }
-    closedir($dh2);
     if($r) { last; }
   }
-  closedir($dh1);
   if($r) { return; }
 
 
