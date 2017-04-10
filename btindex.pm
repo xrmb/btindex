@@ -1101,6 +1101,7 @@ sub load
 
     if((!$self->{dirty} || $self->{save} < 0) && $self->{dbfm} && $self->{dbfm} != (stat($self->{dbf}))[9])
     {
+      if(time() - (stat($self->{dbf}))[7] < 30) { warn('changed, waiting for db to age...'); return; }
       printf("reloading %s (%d)...\n", $self->{dbf}, -s $self->{dbf});
       $self->{db} = undef;
     }
