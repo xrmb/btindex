@@ -14,7 +14,9 @@ use Convert::Bencode_XS;
 use Archive::Zip;
 use File::Path qw(make_path);
 use Digest::SHA1;
+use HTTP::Tiny;
 use LWP;
+use JSON::PP;
 #use Win32::Process::Info; ### not thread safe
 use Math::Random;
 use IO::Socket::SSL; IO::Socket::SSL->VERSION(1.42); ### this seems to make any initial https communication faster
@@ -971,6 +973,90 @@ sub tixati_transfer_add
 
 
 
+sub webapi_check
+{
+  my (@hashs) = @_;
+
+  my $webapi = config('webapi') || die 'please set webapi in config';
+
+  my $ua = new HTTP::Tiny();
+
+  my $res = $ua->post($webapi.'/mcheck/', {
+      headers => { 'Content-Type' => 'application/json' },
+      content => JSON::PP::encode_json(\@hashs)
+    });
+
+  if($res->{status} != 200)
+  {
+    return $res;
+  }
+
+  my $codes = JSON::PP::decode_json($res->{content});
+  my @mhashs;
+  while(@$codes)
+  {
+    my $hash = shift(@hashs);
+    my $r = shift(@$codes);
+    if($r == 404)
+    {
+      push(@mhashs, $hash);
+    }
+  }
+
+  $res->{missing} = \@mhashs;
+
+  return $res;
+}
+
+
+
+sub webapi_add
+{
+  my ($hash) = @_;
+
+  my $webapi = config('webapi') || die 'please set webapi in config';
+
+  my $ua = new HTTP::Tiny();
+
+  my $tf = torrent_path($hash);
+  my $data = read_file($tf);
+  my @s = stat($tf);
+
+  my $res = $ua->post($webapi.'/add/?time='.$s[9], {
+      headers => {
+        'Content-Type' => 'application/octet-stream',
+        'Content-Length' => length($data),
+      },
+      content => $data
+    });
+
+  return $res;
+}
+
+
+
+sub webapi_get
+{
+  my ($count, $db, @dbx) = @_;
+
+  my $webapi = config('webapi') || die 'please set webapi in config';
+
+  my $ua = new HTTP::Tiny();
+
+  my $res = $ua->get($webapi."/get/?db=$db&count=$count&".join('&', map { "dbx=$_" } @dbx));
+
+  if($res->{status} != 200)
+  {
+    return $res;
+  }
+
+  $res->{data} = JSON::PP::decode_json($res->{content});
+
+  return $res;
+}
+
+
+
 1;
 
 
@@ -1099,7 +1185,7 @@ sub load
   {
     $self->{dbfc} = time();
 
-    if((!$self->{dirty} || $self->{save} < 0) && $self->{dbfm} && $self->{dbfm} != (stat($self->{dbf}))[9])
+    if((!$self->{dirty} || $self->{save} < 0) && -s $self->{dbf} && $self->{dbfm} && $self->{dbfm} != (stat($self->{dbf}))[9])
     {
       if(time() - (stat($self->{dbf}))[7] < 30) { warn('changed, waiting for db to age...'); return; }
       printf("reloading %s (%d)...\n", $self->{dbf}, -s $self->{dbf});
