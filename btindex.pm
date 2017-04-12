@@ -3,7 +3,7 @@ package btindex;
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(foreach_log logs foreach_torrent foreach_logentry mybdecode read_file write_file run_only_once torrent_infohash
-                 ipaddr load_hash save_hash sevenbin devnull
+                 ipaddr load_hash save_hash sevenbin devnull torrent_path_dir
                  tixati_transfers tixati_transfer_delete tixati_transfer_add);
 our @EXPORT_OK = @EXPORT;
 
@@ -196,6 +196,15 @@ sub torrent_path($)
   my ($hash) = @_;
   $hash = uc($hash);
   return sprintf('%s/%s/%s/%s', config('torrents'), substr($hash, 0, 2), substr($hash, 2, 2), $hash);
+}
+
+
+
+sub torrent_path_dir($)
+{
+  my ($hash) = @_;
+  $hash = uc($hash);
+  return sprintf('%s/%s/%s', config('torrents'), substr($hash, 0, 2), substr($hash, 2, 2));
 }
 
 
@@ -964,6 +973,95 @@ sub tixati_transfer_add
 
 
 
+sub tdb_get
+{
+  my ($count, $db, @dbx) = @_;
+
+  my @r;
+  if($count > 100) { $count = 100; }
+  if($count < 1) { $count = 1; }
+
+  my %dbfh;
+  my %offsets;
+  foreach my $db (@dbx, $db)
+  {
+    my $dbf = config('dbs').'/'.$db;
+    open(my $fh, '<', $dbf) || die "$!/$dbf";
+    binmode($fh);
+    sysread($fh, my $offsets, 0x40000);
+
+    $dbfh{$db} = $fh;
+    $offsets{$db} = [ unpack('N' x 0x10000, $offsets) ];
+  }
+
+  my $rounds = 25;
+  while(@r < $count && $rounds)
+  {
+    $rounds--;
+
+    my $l1 = int(rand(256));
+    my $l2 = int(rand(256));
+
+    my %hashs;
+    foreach my $db (@dbx, $db)
+    {
+      my $offset = 0x40000;
+
+      my $i;
+      for($i = 0; $i < $l1*256+$l2; $i++)
+      {
+        $offset += $offsets{$db}[$i] * 20;
+      }
+
+      sysseek($dbfh{$db}, $offset, 0) || die;
+
+      my $read = $offsets{$db}[$i] * 20;
+
+      #warn("reading $db from pos $offset");
+
+      die unless(sysread($dbfh{$db}, my $data, $read) == $read);
+
+      $hashs{$db} = [ unpack('H40' x $offsets{$db}[$i], $data) ];
+
+      if(0)
+      {
+        my @hashs = sort(@{$hashs{$db}});
+        warn("$hashs[0] .. $hashs[-1] ".scalar(@hashs));
+      }
+    }
+
+
+    if(opendir(my $dh, torrent_path_dir(sprintf('%02X/%02X', $l1, $l2))))
+    {
+      $hashs{'*fs'} = map { lc($_) => 1 } grep { /^[0-9a-f]{40}$/ } readdir($dh);
+      closedir($dh);
+    }
+
+
+    my %h = map { $_ => 1 } @{$hashs{$db}};
+    foreach my $db (@dbx, '*fs')
+    {
+      foreach my $hash (@{$hashs{$db}})
+      {
+        delete($h{$hash});
+      }
+    }
+
+    my @h = keys(%h);
+    my $p = rand(1000);
+    while(@r < $count && @h)
+    {
+      push(@r, splice(@h, $p % scalar(@h), 1));
+      $p += rand(1000);
+    }
+  }
+
+  foreach my $fh (values(%dbfh)) { close($fh) };
+
+  return [ map { uc($_) } @r ];
+}
+
+
 1;
 
 
@@ -1059,7 +1157,7 @@ sub new
   bless($self, $class);
   my %args = @_;
 
-  $self->{dbf} = File::Spec->rel2abs($args{file}) || die 'need file';
+  $self->{dbf} = File::Spec->rel2abs($args{file}) || File::Spec->rel2abs(config('dbs').'/'.$args{file}) || die 'need file';
   $self->{save} = $args{save} || 0;
   $self->{db} = undef;
   $self->{dbfc} = 0;
