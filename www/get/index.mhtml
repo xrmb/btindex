@@ -1,0 +1,15 @@
+<%FLAGS>
+  inherit => '/json.mc'
+</%FLAGS>
+
+<%ARGS>
+  $db
+  @dbx => qw(torrents_got torrents_fs)
+  $count => 100
+</%ARGS>
+<%INIT>
+  use lib __FILE__.'/../../';
+  use btindex;
+
+  return btindex::tdb_get($count, $db, @dbx);
+</%INIT>
