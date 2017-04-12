@@ -1,0 +1,31 @@
+<%FLAGS>
+  inherit => '/json.mc'
+</%FLAGS>
+
+<%ARGS>
+  $data
+</%ARGS>
+<%INIT>
+  use lib __FILE__.'/../../';
+  use btindex;
+
+  my @ret;
+  foreach my $hash (@$data)
+  {
+    unless($hash =~ /^[0-9A-F]{40}$/)
+    {
+      push(@ret, 400);
+      next;
+    }
+
+    unless(-f btindex::torrent_path($hash))
+    {
+      push(@ret, 404);
+      next;
+    }
+
+    push(@ret, 200);
+    next;
+  }
+  return \@ret;
+</%INIT>
