@@ -6,13 +6,17 @@
   unless($q =~ /^[0-9A-F]{40}$/)
   {
     $m->out('invalid hash');
-    $m->abort(404);
+    $r->headers_out->{Status} = 400;
+    $m->abort(400);
+    return;
   }
 
-  unless(-f sprintf('%s/%s/%s/%s', btindex::config('torrents'), substr($q, 0, 2), substr($q, 2, 2), $q))
+  unless(-f btindex::torrent_path($q))
   {
     $m->out('unknown');
-    $m->abort(404)
+    $r->headers_out->{Status} = 404;
+    $m->abort(404);
+    return;
   }
 
   $m->out('known');
