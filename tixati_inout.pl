@@ -134,7 +134,7 @@ MAIN: for(;;)
 
   for(1..15)
   {
-    $con->Title(sprintf("%d %.1f %s", $tdone, 3600*$tdone/(time()-$^T), '.' x $_, $db));
+    $con->Title(sprintf("%d %.1f %s", $tdone, 3600*$tdone/(time()-$^T), $db, '.' x $_));
     if((ReadKey(-1) || '') eq 'x') { print("x-key\n"); last MAIN; }
     sleep(1);
   }
