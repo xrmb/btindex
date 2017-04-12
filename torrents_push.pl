@@ -5,7 +5,6 @@ use Thread::Queue;
 
 #use LWP;
 #use HTTP::Request::Common;
-use HTTP::Tiny;
 use JSON::PP;
 use Win32::Console;
 
@@ -33,32 +32,9 @@ for(1..3) { push(@ta,
 
     print("thread add $id start...\n");
 
-    #my $ua = new LWP::UserAgent();
-    #$ua->timeout(10);
-    my $ua = new HTTP::Tiny();
-
     while(defined(my $hash = $qa->dequeue()))
     {
-      my $tf = btindex::torrent_path($hash);
-      my $data = btindex::read_file($tf);
-      my @s = stat($tf);
-      #my $req = HTTP::Request::Common::POST(
-      #    $webapi.'/add/?time='.$s[9],
-      #    'Content-Type' => 'application/octet-stream',
-      #    'Content-Length' => length($data),
-      #    Content => $data
-      #  );
-
-      #my $res = $ua->request($req);
-
-      my $res = $ua->post($webapi.'/add/?time='.$s[9], {
-          headers => {
-            'Content-Type' => 'application/octet-stream',
-            'Content-Length' => length($data),
-          },
-          content => $data
-        });
-
+      my $res = btindex::webapi_add($hash);
       printf("add %d\t%s\t%s\n", $id, $hash, $res->{status});
     }
 
@@ -78,42 +54,19 @@ my $tc = threads->create(sub
 
       printf("check\t%s .. %s\n", substr($hashs[0], 0, 18), substr($hashs[-1], 0, 18));
 
-      #my $ua = new LWP::UserAgent();
-      #$ua->timeout(10);
-
-      my $ua = new HTTP::Tiny();
-
-      #my $req = HTTP::Request::Common::POST(
-      #    $webapi.'/mcheck/',
-      #    'Content-Type' => 'application/json',
-      #    Content => encode_json(\@hashs));
-
-      #my $res = $ua->request($req);
-      my $res = $ua->post($webapi.'/mcheck/', {
-          headers => { 'Content-Type' => 'application/json' },
-          content => JSON::PP::encode_json(\@hashs)
-        });
-
+      my $res = btindex::webapi_check(@hashs);
       if($res->{status} != 200)
       {
         printf("check\terror %d\t%s\n", $res->{status}, $res->{reason});
         return;
       }
 
-      $res = JSON::PP::decode_json($res->{content});
-      my $add = 0;
-      while(@$res)
+      my $add = scalar(@{$res->{missing}});
+      if($add)
       {
-        my $hash = shift(@hashs);
-        my $r = shift(@$res);
-        #printf("check\t%s\t%s\n", $hash, $r);
-        if($r == 404)
-        {
-          $qa->enqueue($hash);
-          $add++;
-        }
+        printf("check\t%s .. %s\t%d to add\n", substr($_[0], 0, 18), substr($_[-1], 0, 18), $add);
+        $qa->enqueue(@{$res->{missing}});
       }
-      if($add) { printf("check\t%s .. %s\t%d\n", substr($_[0], 0, 18), substr($_[-1], 0, 18), $add); }
     };
 
     my @hashs;
