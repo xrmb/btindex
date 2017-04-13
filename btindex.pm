@@ -1081,39 +1081,34 @@ sub new
   bless($self, $class);
   my %args = @_;
 
-  $self->{dbf} = File::Spec->rel2abs($args{file}) || die 'need file';
-  $self->{fh} = undef;
+  $self->{dbf} = File::Spec->rel2abs($args{file}) || File::Spec->rel2abs(config('dbs').'/'.$args{file}) || die 'need file';
   $self->{buffer} = undef;
+  $self->{block} = -1;
   $self->{at} = undef;
+
+  $self->{offsets} = [ unpack('N' x 0x10000, $self->_read(0, 0x40000)) ];
 
   return $self;
 }
 
 
 
-sub DESTROY
-{
-  my $self = shift();
-  if($self->{fh}) { close($self->{fh}); }
-}
-
-
-
-sub load
+sub _read
 {
   my $self = shift();
 
-  return if($self->{fh});
+  my ($offset, $length) = @_;
 
   open(my $fh, '<', $self->{dbf}) || die $!;
   binmode($fh);
 
-  my $offsets;
-  my $r = sysread($fh, $offsets, 0x40000);
-  if($r != 0x40000) { die "offsets: want ".(0x40000).", got: $r, length: ".length($offsets); }
+  if(sysseek($fh, $offset, 0) != $offset) { die 'seek error'; }
+  my $r = sysread($fh, my $data, $length);
+  if($r != $length) { die "read: want ".($length).", got: $r, length: ".length($data); }
 
-  $self->{fh} = $fh;
-  $self->{at} = 0;
+  close($fh);
+
+  return $data;
 }
 
 
@@ -1122,13 +1117,19 @@ sub it_id
 {
   my $self = shift();
 
-  $self->load();
-
   if($self->{at}*20 >= length($self->{buffer}))
   {
+    $self->{block}++;
+    return undef if($self->{block} == 0x10000);
+
     $self->{at} = 0;
-    my $r = sysread($self->{fh}, $self->{buffer}, 20*100000);
-    return undef if($r == 0);
+
+    my $offset = 0x40000;
+    for(my $i = 0; $i < $self->{block}; $i++)
+    {
+      $offset += $self->{offsets}[$i]*20;
+    }
+    $self->{buffer} = $self->_read($offset, $self->{offsets}[$self->{block}]*20);
   }
 
   my $id = uc(unpack('H*', substr($self->{buffer}, $self->{at}*20, 20)));
@@ -1137,6 +1138,21 @@ sub it_id
 
   return $id;
 }
+
+
+sub set_it_id
+{
+  my $self = shift();
+
+  my ($id) = @_;
+
+  $self->{block} = hex(substr($id.'0000', 0, 4));
+  $self->{buffer} = undef;
+  $self->{at} = 0;
+
+  return;
+}
+
 
 1;
 
