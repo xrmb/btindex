@@ -14,7 +14,9 @@ use Convert::Bencode_XS;
 use Archive::Zip;
 use File::Path qw(make_path);
 use Digest::SHA1;
+use HTTP::Tiny;
 use LWP;
+use JSON::PP;
 #use Win32::Process::Info; ### not thread safe
 use Math::Random;
 use IO::Socket::SSL; IO::Socket::SSL->VERSION(1.42); ### this seems to make any initial https communication faster
@@ -216,18 +218,28 @@ sub foreach_torrent
 
   my $r = 0;
   my $tdir = config('torrents');
+
   opendir(my $dh1, $tdir) || die "$! ($tdir)";
-  L1: foreach my $l1 (sort grep { /^[0-9A-F]{2}$/ } readdir($dh1))
+  my @l1 = sort grep { /^[0-9A-F]{2}$/ } readdir($dh1);
+  closedir($dh1);
+
+  L1: foreach my $l1 (@l1)
   {
     if($args{start} && $l1 lt substr($args{start}, 0, 2)) { next; }
 
     opendir(my $dh2, "$tdir/$l1") || die $!;
-    foreach my $l2 (sort grep { /^[0-9A-F]{2}$/ } readdir($dh2))
+    my @l2 = sort grep { /^[0-9A-F]{2}$/ } readdir($dh2);
+    closedir($dh2);
+
+    foreach my $l2 (@l2)
     {
       if($args{start} && "$l1$l2" lt substr($args{start}, 0, 4)) { next; }
 
       opendir(my $dh3, "$tdir/$l1/$l2") || die $!;
-      foreach my $l3 (sort grep { /^[0-9A-F]{40}$/ } readdir($dh3))
+      my @l3 = sort grep { /^[0-9A-F]{40}$/ } readdir($dh3);
+      closedir($dh3);
+
+      foreach my $l3 (@l3)
       {
         if($args{start} && $l3 lt $args{start}) { next; }
         if($args{end} && $l3 gt $args{end}) { last L1; }
@@ -269,13 +281,10 @@ sub foreach_torrent
           if($r) { last; }
         }
       }
-      closedir($dh3);
       if($r) { last; }
     }
-    closedir($dh2);
     if($r) { last; }
   }
-  closedir($dh1);
   if($r) { return; }
 
 
@@ -973,6 +982,90 @@ sub tixati_transfer_add
 
 
 
+sub webapi_check
+{
+  my (@hashs) = @_;
+
+  my $webapi = config('webapi') || die 'please set webapi in config';
+
+  my $ua = new HTTP::Tiny();
+
+  my $res = $ua->post($webapi.'/mcheck/', {
+      headers => { 'Content-Type' => 'application/json' },
+      content => JSON::PP::encode_json(\@hashs)
+    });
+
+  if($res->{status} != 200)
+  {
+    return $res;
+  }
+
+  my $codes = JSON::PP::decode_json($res->{content});
+  my @mhashs;
+  while(@$codes)
+  {
+    my $hash = shift(@hashs);
+    my $r = shift(@$codes);
+    if($r == 404)
+    {
+      push(@mhashs, $hash);
+    }
+  }
+
+  $res->{missing} = \@mhashs;
+
+  return $res;
+}
+
+
+
+sub webapi_add
+{
+  my ($hash) = @_;
+
+  my $webapi = config('webapi') || die 'please set webapi in config';
+
+  my $ua = new HTTP::Tiny();
+
+  my $tf = torrent_path($hash);
+  my $data = read_file($tf);
+  my @s = stat($tf);
+
+  my $res = $ua->post($webapi.'/add/?time='.$s[9], {
+      headers => {
+        'Content-Type' => 'application/octet-stream',
+        'Content-Length' => length($data),
+      },
+      content => $data
+    });
+
+  return $res;
+}
+
+
+
+sub webapi_get
+{
+  my ($count, $db, @dbx) = @_;
+
+  my $webapi = config('webapi') || die 'please set webapi in config';
+
+  my $ua = new HTTP::Tiny();
+
+  my $res = $ua->get($webapi."/get/?db=$db&count=$count&".join('&', map { "dbx=$_" } @dbx));
+
+  if($res->{status} != 200)
+  {
+    return $res;
+  }
+
+  $res->{data} = JSON::PP::decode_json($res->{content});
+
+  return $res;
+}
+
+
+
 sub tdb_get
 {
   my ($count, $db, @dbx) = @_;
@@ -1206,8 +1299,9 @@ sub load
   {
     $self->{dbfc} = time();
 
-    if((!$self->{dirty} || $self->{save} < 0) && $self->{dbfm} && $self->{dbfm} != (stat($self->{dbf}))[9])
+    if((!$self->{dirty} || $self->{save} < 0) && -s $self->{dbf} && $self->{dbfm} && $self->{dbfm} != (stat($self->{dbf}))[9])
     {
+      if(time() - (stat($self->{dbf}))[7] < 30) { warn('changed, waiting for db to age...'); return; }
       printf("reloading %s (%d)...\n", $self->{dbf}, -s $self->{dbf});
       $self->{db} = undef;
     }

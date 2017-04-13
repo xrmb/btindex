@@ -21,12 +21,24 @@ my $random = $config->{tixati_inout_random};
 my $inst = $config->{tixati_inout_inst} || 1;
 GetOptions('db=s' => \$db, 'start=s' => \$start, random => \$random, 'inst=i' => \$inst) || die;
 
-die unless(-f __FILE__."/../dbs/$db");
-my $dbdo = new btindex::tdb(file => __FILE__."/../dbs/$db");
-my $dbgot = new btindex::tdb(file => __FILE__.'/../dbs/torrents_got');
-my $dbfs = new btindex::tdb(file => __FILE__.'/../dbs/torrents_fs');
 
-if($start) { $dbdo->set_it_id($start); }
+my $remote;
+my $dbdo;
+my $dbgot;
+my $dbfs;
+if($db =~ s/^remote://)
+{
+  $remote = [];
+}
+else
+{
+  die unless(-f btindex::config('dbs').'/'.$db);
+  $dbdo = new btindex::tdb(file => $db);
+  $dbgot = new btindex::tdb(file => 'torrents_got');
+  $dbfs = new btindex::tdb(file => 'torrents_fs');
+
+  if($start) { $dbdo->set_it_id($start); }
+}
 
 my $con = new Win32::Console();
 
@@ -82,11 +94,40 @@ MAIN: for(;;)
 
     if($add <= 0) { sleep(10); next; }
 
-    while(defined(my $tid = ($random ? $dbdo->random_id() : $dbdo->it_id())))
+    for(;;)
     {
-      if(defined($dbfs->sid($tid))) { next; }
-      if(defined($dbgot->sid($tid))) { next; }
-      if(-f sprintf("%s/%s/%s/%s", $config->{torrents}, substr($tid, 0, 2), substr($tid, 2, 2), $tid)) { next; }
+      my $tid;
+      if($remote)
+      {
+        if(!@$remote)
+        {
+          my $res = btindex::webapi_get(100, $db, 'torrents_got', 'torrents_fs');
+          if($res->{status} != 200)
+          {
+            printf("webapi get error: %s\n", $res->{status});
+            sleep(15);
+            next;
+          }
+
+          $remote = $res->{data};
+        }
+        $tid = shift(@$remote) || next;
+      }
+      else
+      {
+        $tid = $random ? $dbdo->random_id() : $dbdo->it_id();
+      }
+      last unless($tid);
+
+
+      if($dbfs && defined($dbfs->sid($tid))) { next; }
+      if($dbgot && defined($dbgot->sid($tid))) { next; }
+      if(-f btindex::torrent_path($tid)) { next; }
+
+      if(!$remote)
+      {
+        ### webapi check ###
+      }
 
       sleep(1);
       my ($code, $content) = tixati_transfer_add($ic, $tid);
@@ -120,10 +161,16 @@ MAIN: for(;;)
       next;
     }
     $ih = uc($ih);
-    my $d = sprintf("%s/%s/%s/%s", $config->{torrents}, substr($ih, 0, 2), substr($ih, 2, 2), $ih);
+    my $d = btindex::torrent_path($ih);
     printf("%s %s %s\n", scalar(localtime), $ih, $s);
     write_file($d, $tc);
     unlink($s);
+
+    if($config->{'webapi'})
+    {
+      my $res = btindex::webapi_add($ih);
+    }
+
     $tdone++;
     $done++;
   }
