@@ -1002,6 +1002,7 @@ sub webapi_check
 
   my $codes = JSON::PP::decode_json($res->{content});
   my @mhashs;
+  my @khashs;
   while(@$codes)
   {
     my $hash = shift(@hashs);
@@ -1010,9 +1011,14 @@ sub webapi_check
     {
       push(@mhashs, $hash);
     }
+    if($r == 200)
+    {
+      push(@khashs, $hash);
+    }
   }
 
   $res->{missing} = \@mhashs;
+  $res->{known} = \@khashs;
 
   return $res;
 }
