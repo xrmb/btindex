@@ -3,16 +3,19 @@
 use threads;
 use Thread::Queue;
 
-#use LWP;
-#use HTTP::Request::Common;
 use JSON::PP;
 use Win32::Console;
+use Cwd;
 
 use btindex;
 
 use strict;
 
 $| = 1;
+
+
+if($ARGV[0] eq 'create') { exit system(qq|schtasks /create /tn "$ARGV[1]\\btindex\\torrents_push" /st 00:00 /sc daily /mo 1 /tr "$^X |.Cwd::abs_path(__FILE__).qq|"|); }
+if($ARGV[0] eq 'delete') { exit system(qq|schtasks /delete /tn "$ARGV[1]\\btindex\\torrents_push"|); }
 
 
 my $webapi = btindex::config('webapi') || die 'setup webapi in config';
@@ -36,6 +39,11 @@ for(1..3) { push(@ta,
     {
       my $res = btindex::webapi_add($hash);
       printf("add %d\t%s\t%s\n", $id, $hash, $res->{status});
+
+      if($res->{status} == 200)
+      {
+        unlink(btindex::torrent_path($hash));
+      }
     }
 
     print("thread add $id end...\n");
@@ -66,6 +74,11 @@ my $tc = threads->create(sub
       {
         printf("check\t%s .. %s\t%d to add\n", substr($_[0], 0, 18), substr($_[-1], 0, 18), $add);
         $qa->enqueue(@{$res->{missing}});
+      }
+
+      foreach my $hash (@{$res->{known}})
+      {
+        unlink(btindex::torrent_path($hash));
       }
     };
 
