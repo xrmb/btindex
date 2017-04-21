@@ -1028,14 +1028,15 @@ sub webapi_add
   my $ua = new HTTP::Tiny();
 
   my $tf = torrent_path($hash);
+  my $time = time();
   if(!$data)
   {
     $data = read_file($tf) || return { status => 500, message => 'no such file' };
+    $time = (stat($tf))[9];
   }
-  
-  my @s = stat($tf);
 
-  my $res = $ua->post($webapi.'/add/?time='.$s[9], {
+
+  my $res = $ua->post($webapi.'/add/?time='.$time, {
       headers => {
         'Content-Type' => 'application/octet-stream',
         'Content-Length' => length($data),
