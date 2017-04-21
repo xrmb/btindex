@@ -23,21 +23,23 @@ GetOptions('db=s' => \$db, 'start=s' => \$start, random => \$random, 'inst=i' =>
 
 
 my $remote;
-my $dbdo;
-my $dbgot;
-my $dbfs;
+my $local;
+#my $dbdo;
+#my $dbgot;
+#my $dbfs;
 if($db =~ s/^remote://)
 {
   $remote = [];
 }
 else
 {
+  $local = [];
   die unless(-f btindex::config('dbs').'/'.$db);
-  $dbdo = new btindex::tdb(file => $db);
-  $dbgot = new btindex::tdb(file => 'torrents_got');
-  $dbfs = new btindex::tdb(file => 'torrents_fs');
+  #$dbdo = new btindex::tdb(file => $db);
+  #$dbgot = new btindex::tdb(file => 'torrents_got');
+  #$dbfs = new btindex::tdb(file => 'torrents_fs');
 
-  if($start) { $dbdo->set_it_id($start); }
+  #if($start) { $dbdo->set_it_id($start); }
 }
 
 my $con = new Win32::Console();
@@ -115,13 +117,18 @@ MAIN: for(;;)
       }
       else
       {
-        $tid = $random ? $dbdo->random_id() : $dbdo->it_id();
+        #$tid = $random ? $dbdo->random_id() : $dbdo->it_id();
+        if(!@$local)
+        {
+          $local = btindex::tdb_get(1000, $db, 'torrents_got', 'torrents_fs');
+        }
+        $tid = shift(@$local) || next;
       }
       last unless($tid);
 
 
-      if($dbfs && defined($dbfs->sid($tid))) { next; }
-      if($dbgot && defined($dbgot->sid($tid))) { next; }
+      #if($dbfs && defined($dbfs->sid($tid))) { next; }
+      #if($dbgot && defined($dbgot->sid($tid))) { next; }
       if(-f btindex::torrent_path($tid)) { next; }
 
       if(!$remote)
@@ -131,10 +138,7 @@ MAIN: for(;;)
 
       sleep(1);
       my ($code, $content) = tixati_transfer_add($ic, $tid);
-      if($code == 200)
-      {
-      }
-      else
+      if($code != 200)
       {
         printf("%d: add\t%s: %d\n", $ic, $tid, $code);
       }
@@ -161,14 +165,27 @@ MAIN: for(;;)
       next;
     }
     $ih = uc($ih);
-    my $d = btindex::torrent_path($ih);
-    printf("%s %s %s\n", scalar(localtime), $ih, $s);
-    write_file($d, $tc);
     unlink($s);
+    my $write = 1;
 
-    if($config->{'webapi'})
+    if($config->{'type'} ne 'master' && $config->{'webapi'})
     {
-      my $res = btindex::webapi_add($ih);
+      my $res = btindex::webapi_add($ih, $tc);
+      if($res->{success})
+      {
+        $write = 0;
+      }
+      else
+      {
+        printf("webapi add error: %s\n", $res->{status});
+      }
+    }
+
+    if($write)
+    {
+      my $d = btindex::torrent_path($ih);
+      printf("%s %s %s\n", scalar(localtime), $ih, $s);
+      write_file($d, $tc);
     }
 
     $tdone++;
