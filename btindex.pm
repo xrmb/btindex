@@ -1021,14 +1021,18 @@ sub webapi_check
 
 sub webapi_add
 {
-  my ($hash) = @_;
+  my ($hash, $data) = @_;
 
   my $webapi = config('webapi') || die 'please set webapi in config';
 
   my $ua = new HTTP::Tiny();
 
   my $tf = torrent_path($hash);
-  my $data = read_file($tf);
+  if(!$data)
+  {
+    $data = read_file($tf) || return { status => 500, message => 'no such file' };
+  }
+  
   my @s = stat($tf);
 
   my $res = $ua->post($webapi.'/add/?time='.$s[9], {
@@ -1087,7 +1091,7 @@ sub tdb_get
     $offsets{$db} = [ unpack('N' x 0x10000, $offsets) ];
   }
 
-  my $rounds = 25;
+  my $rounds = 100;
   while(@r < $count && $rounds)
   {
     $rounds--;
@@ -1124,9 +1128,9 @@ sub tdb_get
     }
 
 
-    if(opendir(my $dh, torrent_path_dir(sprintf('%02X/%02X', $l1, $l2))))
+    if(opendir(my $dh, torrent_path_dir(sprintf('%02X%02X', $l1, $l2))))
     {
-      $hashs{'*fs'} = map { lc($_) => 1 } grep { /^[0-9a-f]{40}$/ } readdir($dh);
+      $hashs{'*fs'} = [ map { lc($_) } grep { /^[0-9a-f]{40}$/i } readdir($dh) ];
       closedir($dh);
     }
 
@@ -1136,7 +1140,10 @@ sub tdb_get
     {
       foreach my $hash (@{$hashs{$db}})
       {
-        delete($h{$hash});
+        if(delete($h{$hash}))
+        {
+          #warn("x $hash") if($db eq '*fs');
+        }
       }
     }
 
@@ -1212,7 +1219,10 @@ sub it_id
 
   if($self->{at}*20 >= length($self->{buffer}))
   {
-    $self->{block}++;
+    do
+    {
+      $self->{block}++;
+    } while($self->{block} != 0x10000 && $self->{offsets}[$self->{block}] == 0);
     return undef if($self->{block} == 0x10000);
 
     $self->{at} = 0;
