@@ -181,10 +181,10 @@ MAIN: for(;;)
       }
     }
 
+    printf("%s %s %s\n", scalar(localtime), $ih, $s);
     if($write)
     {
       my $d = btindex::torrent_path($ih);
-      printf("%s %s %s\n", scalar(localtime), $ih, $s);
       write_file($d, $tc);
     }
 
