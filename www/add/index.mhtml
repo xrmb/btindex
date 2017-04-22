@@ -10,7 +10,7 @@
   $time = $time->[0];
 
   if($time !~ m/^\d+$/) { die "time $time?" }
-  if($time > time) { die "time > $time?" }
+  if($time > time + 2*60) { die "time > $time?" }
   if($time < time - 100*24*60*60) { die "time < $time?" }
 
   my $hash = btindex::torrent_infohash3($data) || die;
@@ -19,6 +19,10 @@
   {
     btindex::write_file($tf, $data);# why not??? , $time);
     utime($time, $time, $tf);
+  }
+  else
+  {
+    warn "dupe $tf ".(time - (stat($tf))[9]);
   }
 
   $m->out($hash);
