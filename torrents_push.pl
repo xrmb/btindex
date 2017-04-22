@@ -18,6 +18,7 @@ if($ARGV[0] eq 'create') { exit system(qq|schtasks /create /tn "$ARGV[1]\\btinde
 if($ARGV[0] eq 'delete') { exit system(qq|schtasks /delete /tn "$ARGV[1]\\btindex\\torrents_push"|); }
 
 
+die if(btindex::config('type') ne 'slave');
 my $webapi = btindex::config('webapi') || die 'setup webapi in config';
 
 my $qc = new Thread::Queue();
