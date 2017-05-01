@@ -8,7 +8,7 @@ use Thread::Queue;
 use HTTP::Tiny;
 use Getopt::Long;
 use Term::ReadKey;
-use Win32::DriveInfo;
+#use Win32::DriveInfo;
 use Win32::Console;
 use Convert::Bencode;
 #use Convert::Bencode_XS;
