@@ -6,6 +6,7 @@ use Compress::Zlib;
 use Term::ReadKey;
 use IO::Uncompress::Gunzip;
 use Win32::SearchPath;
+use Whatsup;
 
 use lib (__FILE__.'/..');
 use btindex;
@@ -33,14 +34,20 @@ $dbc->clear();
 $dbi->clear();
 $dbn->clear();
 
-TRACKER: foreach my $url (
-                 'http://zer0day.to/fullscrape.gz',
-                  'http://coppersurfer.tk/full_scrape_not_a_tracker.tar.gz',
-                  'http://scrape.leechers-paradise.org/static_scrape',
-                  #'http://internetwarriors.net/full.tar.gz',
-                  'http://tracker.sktorrent.net/full_scrape_not_a_tracker.tar.gz'
-                )
+open(my $log, '>>', __FILE__.'/../data/db_trackers.log');
+
+my %trackers = (
+    'http://zer0day.to/fullscrape.gz' => 'zd',
+    'http://coppersurfer.tk/full_scrape_not_a_tracker.tar.gz' => 'cs',
+    'http://scrape.leechers-paradise.org/static_scrape' => 'lp',
+    #'http://internetwarriors.net/full.tar.gz' => 'iw',
+    'http://tracker.sktorrent.net/full_scrape_not_a_tracker.tar.gz' => 'sk'
+  );
+
+TRACKER: foreach my $url (keys(%trackers))
 {
+  my $short = (split(/\./, (split(/\//, $url))[2]))[-2];
+
   my $cmd = "$wget $url -O - -T 10 -q";
   if($ARGV[0])
   {
@@ -48,7 +55,13 @@ TRACKER: foreach my $url (
   }
 
   warn $cmd;
-  open(my $fh, '-|', $cmd) || next;
+  my $fh;
+  if(!open($fh, '-|', $cmd))
+  {
+    if($log) { printf($log "%s\t%s\terror\n", ''.localtime(), $url); }
+    next;
+  }
+
   my $gz;
   if($url =~ /\.gz$/)
   {
@@ -65,14 +78,16 @@ TRACKER: foreach my $url (
     if(read($fh, $data, 0x10000) != 0x10000) { next; }
   }
 
+  my $dbntd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_n_%04d%02d%02d_%s', $ts[5]+1900, $ts[4]+1, $ts[3], $trackers{$url}), save => 10_000_000);
+
+  my $c = 0;
+  my $ac = 0;
   if($data =~ /:\d+:\d+\n/)
   {
     print("parsing mode: 1\n");
 
     my $i = -1;
     my $l = $i;
-    my $c = 0;
-    my $ac = 0;
     while(($i = index($data, "\n", $i+1)) != -1)
     {
       #if((ReadKey(-1) || '') eq 'x') { last TRACKER; }
@@ -101,6 +116,7 @@ TRACKER: foreach my $url (
 
         $dbn->sid($tid, add => 1);
         $dbnd->sid($tid, add => 1);
+        $dbntd->sid($tid, add => 1);
       }
 
       if($cc) { $dbc->sid($tid, add => 1); $dbcd->sid($tid, add => 1); }
@@ -138,8 +154,6 @@ TRACKER: foreach my $url (
     print("parsing mode: 2\n");
 
     my $i = -1;
-    my $c = 0;
-    my $ac = 0;
     while(($i = index($data, 'd8:completei', $i+1)) != -1)
     {
       #if((ReadKey(-1) || '') eq 'x') { last TRACKER; }
@@ -166,6 +180,7 @@ TRACKER: foreach my $url (
 
         $dbn->sid($tid, add => 1);
         $dbnd->sid($tid, add => 1);
+        $dbntd->sid($tid, add => 1);
       }
 
       if($cc) { $dbc->sid($tid, add => 1); $dbcd->sid($tid, add => 1); }
@@ -197,5 +212,11 @@ TRACKER: foreach my $url (
     }
   }
 
+  Whatsup->record(app => 'db_trackers', $short => $c);
+  if($log) { printf($log "%s\t%s\t%d\t%d\n", ''.localtime(), $url, $c, $ac); }
+
   last if($ARGV[0]);
 }
+
+
+close($log);
