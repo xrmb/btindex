@@ -10,6 +10,7 @@ our @EXPORT_OK = @EXPORT;
 use threads;
 use threads::shared;
 
+use Win32API::Registry qw(:ALL);
 use Convert::Bencode_XS;
 use Archive::Zip;
 use File::Path qw(make_path);
@@ -149,6 +150,40 @@ sub logs
 }
 
 
+sub torrent_data($)
+{
+  my ($tid) = @_;
+  my $tf = torrent_path($tid);
+  if(-f $tf) { return read_file($tf); }
+
+  my $l1 = substr($tid, 0, 2);
+  my $l2 = substr($tid, 2, 2);
+  my $zip = Archive::Zip->new();
+  if($zip->read(__FILE__."/../torrents/$l1/$l2.zip") != 0) { return; }
+  return $zip->contents($tid);
+}
+
+
+sub torrent_decode($)
+{
+  my ($dc) = @_;
+
+  my $d;
+  eval { $d = Convert::Bencode_XS::bdecode($dc); };
+  if($@)
+  {
+    $dc =~ s/:([\w\.]+)i-?\d.\d+E\+\d+e/:${1}i1e/g;
+    eval { $d = Convert::Bencode_XS::bdecode($dc); };
+    if($@)
+    {
+      $@ =~ s/(pos \d+), .*$/$1/s;
+      return wantarray ? (undef, $@) : undef;
+    }
+  }
+
+  return wantarray ? ($d, 'ok') : $d;
+}
+
 
 sub read_file
 {
@@ -223,70 +258,72 @@ sub foreach_torrent
   my @l1 = sort grep { /^[0-9A-F]{2}$/ } readdir($dh1);
   closedir($dh1);
 
-  L1: foreach my $l1 (@l1)
+  if(!exists($args{fromfs}) || $args{fromfs})
   {
-    if($args{start} && $l1 lt substr($args{start}, 0, 2)) { next; }
-
-    opendir(my $dh2, "$tdir/$l1") || die $!;
-    my @l2 = sort grep { /^[0-9A-F]{2}$/ } readdir($dh2);
-    closedir($dh2);
-
-    foreach my $l2 (@l2)
+    L1: foreach my $l1 (@l1)
     {
-      if($args{start} && "$l1$l2" lt substr($args{start}, 0, 4)) { next; }
+      if($args{start} && $l1 lt substr($args{start}, 0, 2)) { next; }
 
-      opendir(my $dh3, "$tdir/$l1/$l2") || die $!;
-      my @l3 = sort grep { /^[0-9A-F]{40}$/ } readdir($dh3);
-      closedir($dh3);
+      opendir(my $dh2, "$tdir/$l1") || die $!;
+      my @l2 = sort grep { /^[0-9A-F]{2}$/ } readdir($dh2);
+      closedir($dh2);
 
-      foreach my $l3 (@l3)
+      foreach my $l2 (@l2)
       {
-        if($args{start} && $l3 lt $args{start}) { next; }
-        if($args{end} && $l3 gt $args{end}) { last L1; }
+        if($args{start} && "$l1$l2" lt substr($args{start}, 0, 4)) { next; }
 
-        my $tf = "$tdir/$l1/$l2/$l3";
-        if($args{mtime} && (stat($tf))[9] < $args{mtime}) { next; }
+        opendir(my $dh3, "$tdir/$l1/$l2") || die $!;
+        my @l3 = sort grep { /^[0-9A-F]{40}$/ } readdir($dh3);
+        closedir($dh3);
 
-        if($args{invalid} || !$args{invalid} && -s $tf > 3)
+        foreach my $l3 (@l3)
         {
-          my $d = {};
-          my $l = 0;
-          if($args{data} eq 'raw')
-          {
-            $d = read_file($tf);
-            $l = length($d);
-          }
-          elsif($args{data})
-          {
-            my $td = read_file($tf);
-            $l = length($td);
-            if($td !~ /^d/ || $td !~ /e$/)
-            {
-              warn($tf);
-              rename($tf, $tf.'.broken');
-              next;
-            }
-            eval { $d = Convert::Bencode_XS::bdecode($td); };
-            if($@)
-            {
-              my $msg = $@;
-              $msg =~ s/(pos \d+)[\0^\0]*/$1/;
-              warn("$tf -> $msg");
-              rename($tf, $tf.'.broken');
-              next;
-            }
-          }
+          if($args{start} && $l3 lt $args{start}) { next; }
+          if($args{end} && $l3 gt $args{end}) { last L1; }
 
-          $r = $exec->($tf, $d, $l);
-          if($r) { last; }
+          my $tf = "$tdir/$l1/$l2/$l3";
+          if($args{mtime} && (stat($tf))[9] < $args{mtime}) { next; }
+
+          if($args{invalid} || !$args{invalid} && -s $tf > 3)
+          {
+            my $d = {};
+            my $l = 0;
+            if($args{data} eq 'raw')
+            {
+              $d = read_file($tf);
+              $l = length($d);
+            }
+            elsif($args{data})
+            {
+              my $td = read_file($tf);
+              $l = length($td);
+              if($td !~ /^d/ || $td !~ /e$/)
+              {
+                warn($tf);
+                rename($tf, $tf.'.broken');
+                next;
+              }
+              eval { $d = Convert::Bencode_XS::bdecode($td); };
+              if($@)
+              {
+                my $msg = $@;
+                $msg =~ s/(pos \d+)[\0^\0]*/$1/;
+                warn("$tf -> $msg");
+                rename($tf, $tf.'.broken');
+                next;
+              }
+            }
+
+            $r = $exec->($tf, $d, $l);
+            if($r) { last; }
+          }
         }
+        if($r) { last; }
       }
       if($r) { last; }
     }
-    if($r) { last; }
+    if($r) { return; }
   }
-  if($r) { return; }
-
 
   if($args{fromzip})
   {
@@ -355,7 +392,7 @@ sub foreach_torrent
             $l =~ s/^\s+|\s+$//g;
             next unless($l =~ m![0-9A-F]{40}!);
             my ($size, undef, undef, $fn) = split(/\s+/, $l);
-            push(@l, "torrents/$l1/$l2/$fn", $size);
+            push(@l, "$tdir/$l1/$l2/$fn", $size);
           }
           close($fh);
 
@@ -791,7 +828,9 @@ sub torrent_infohash2
 
 sub torrent_infohash_dechunk3
 {
-  my ($string, $offset, $at, $is, $ie) = @_;
+  my ($string, $offset, $at, $is, $ie, $p) = @_;
+
+  if($p) { $p->($$offset, length($string), $at); }
 
   my $item = substr($string, $$offset++, 1);
   if($item eq 'd')
@@ -801,13 +840,13 @@ sub torrent_infohash_dechunk3
     {
       #unshift(@$chunks, $item);
       $$offset--;
-      my $key = torrent_infohash_dechunk3($string, $offset);
+      my $key = torrent_infohash_dechunk3($string, $offset, undef, undef, undef, $p);
       if($key eq 'info' && $at eq '.')
       {
         $$is = $$offset;#scalar(@$chunks);
       }
 
-      torrent_infohash_dechunk3($string, $offset, $at.'.'.$key, $is, $ie);
+      torrent_infohash_dechunk3($string, $offset, $at.'.'.$key, $is, $ie, $p);
 
       if($key eq 'info' && $at eq '.')
       {
@@ -826,7 +865,7 @@ sub torrent_infohash_dechunk3
     {
       #unshift(@$chunks, $item);
       $$offset--;
-      torrent_infohash_dechunk3($string, $offset);
+      torrent_infohash_dechunk3($string, $offset, undef, undef, undef, $p);
       $item = substr($string, $$offset++, 1);
     }
     return;
@@ -861,18 +900,52 @@ sub torrent_infohash_dechunk3
 
 sub torrent_infohash3
 {
-  my $string = shift();
+  my ($string, $p) = @_;
+
   my $offset = 0;
   my $s = 0;
   my $e = 0;
 
-  torrent_infohash_dechunk3($string, \$offset, '.', \$s, \$e);
+  torrent_infohash_dechunk3($string, \$offset, '.', \$s, \$e, $p);
   return undef unless($s && $e);
 
   if(wantarray) { return ($s, $e); }
   return uc(Digest::SHA1::sha1_hex(substr($string, $s, $e-$s)));
 }
 
+
+sub localip
+{
+  return '192.168.1.5';
+}
+
+
+my $vpnip :shared;
+my $vpnip_time :shared;
+sub vpnip
+{
+  if(!$vpnip || $vpnip_time + 180 < time())
+  {
+    my $if = config('vpnif');
+    if($if)
+    {
+      my $key;
+      RegOpenKeyEx(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{$if}", 0, KEY_READ, $key) || die regLastError();
+      RegQueryValueEx($key, "DhcpIPAddress", [], my $type, $vpnip, []) || die;
+      RegCloseKey($key);
+    }
+    else
+    {
+      my $vpn = config('vpn') || die;
+      my $ipconfig = `ipconfig`;
+      $ipconfig =~ s/[\n\r]//gi;
+      $ipconfig =~ m/PPP adapter $vpn:.*?IPv4 Address.*?: ([\d\.]+)/;
+      $vpnip = $1;
+    }
+    $vpnip_time = time();
+  }
+  return $vpnip;
+}
 
 
 sub ipaddr
@@ -887,6 +960,15 @@ sub ipaddr
     return sprintf('%d.%d.%d.%d', ($ip & 0xFF00_0000) >> 24, ($ip & 0x00FF_0000) >> 16, ($ip & 0x0000_FF00) >> 8, ($ip & 0x0000_00FF));
   }
   die $ip;
+}
+
+
+sub badhash
+{
+  my ($hash) = @_;
+
+  return 1 if($hash =~ /^0000000/ && $hash =~ /0000$/);
+  return 1 if($hash =~ /0000000/ || $hash =~ /FFFFFFF/);
 }
 
 
@@ -1079,15 +1161,18 @@ sub webapi_get
 
 sub tdb_get
 {
-  my ($count, $db, @dbx) = @_;
+  my ($count, $dbi, @dbx) = @_;
 
   my @r;
   if($count > 100) { $count = 100; }
   if($count < 1) { $count = 1; }
 
+  if(ref($dbi) ne 'ARRAY') { $dbi = [$dbi]; }
+  push(@$dbi, 'rarbg_n', 'trackers_n');
+
   my %dbfh;
   my %offsets;
-  foreach my $db (@dbx, $db)
+  foreach my $db (@dbx, @$dbi)
   {
     my $dbf = config('dbs').'/'.$db;
     open(my $fh, '<', $dbf) || die "$!/$dbf";
@@ -1107,7 +1192,7 @@ sub tdb_get
     my $l2 = int(rand(256));
 
     my %hashs;
-    foreach my $db (@dbx, $db)
+    foreach my $db (@dbx, @$dbi)
     {
       my $offset = 0x40000;
 
@@ -1142,7 +1227,7 @@ sub tdb_get
     }
 
 
-    my %h = map { $_ => 1 } @{$hashs{$db}};
+    my %h = map { $_ => 1 } map { @{$hashs{$_}} } @$dbi;
     foreach my $db (@dbx, '*fs')
     {
       foreach my $hash (@{$hashs{$db}})
@@ -1286,7 +1371,7 @@ sub new
   $self->{dbf} = File::Spec->rel2abs($args{file}) || File::Spec->rel2abs(config('dbs').'/'.$args{file}) || die 'need file';
   $self->{save} = $args{save} || 0;
   $self->{db} = undef;
-  $self->{dbfc} = 0;
+  $self->{dbfc} = $args{reload} ? 0 : (time() + 900_000_000);
   $self->{dbfm} = 0;
   $self->{it} = undef;
 
