@@ -192,7 +192,7 @@ sub read_file
   my $d;
   my $fh;
   my @s = stat($f);
-  if(!@s) { return ''; }
+  if(!@s) { return; }
   open($fh, '<', $f) || die $!;
   binmode($fh);
   read($fh, $d, $s[7]);
