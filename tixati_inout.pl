@@ -9,6 +9,9 @@ use Whatsup;
 
 use btindex;
 
+use utf8;
+use Encode;
+
 use strict;
 
 
@@ -153,10 +156,21 @@ MAIN: for(;;)
   my $dh;
   if(!-d $config->{tixati_torrents}) { mkdir($config->{tixati_torrents}); }
   opendir($dh, $config->{tixati_torrents}) || die;
-  foreach my $t (grep { /\.(tor|torrent)$/i } readdir($dh))
+  foreach my $t (readdir($dh))
   {
+    next if($t =~ /^\.+$/);
+    if($t !~ /\.(tor|torrent)$/i) { warn("$t???"); next; }
+    
     my $s = $config->{tixati_torrents}.'/'.$t;
-    my $tc = read_file($s) || next;
+    my $tc = read_file($s);
+    if(!$tc)
+    {
+      my $rnd = int(10000*rand());
+      my $cmd = qq|ren "$config->{tixati_torrents}\\*.torrent" "zz$rnd.tor" 2>NUL|;
+      system($cmd);
+      warn('read_file error');
+      next;
+    }
 
     my $ih = btindex::torrent_infohash3($tc);
     if(!$ih)
@@ -165,7 +179,7 @@ MAIN: for(;;)
       next;
     }
     $ih = uc($ih);
-    unlink($s);
+    unlink($s) || warn("unlink $s -> $!");
     my $write = 1;
 
     if($config->{'type'} ne 'master' && $config->{'webapi'})
