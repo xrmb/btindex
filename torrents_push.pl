@@ -7,6 +7,7 @@ use JSON::PP;
 use Win32::Console;
 use Cwd;
 
+use lib (__FILE__.'/..');
 use btindex;
 
 use strict;
