@@ -103,7 +103,7 @@ MAIN: for(;;)
       {
         if(!@$remote)
         {
-          my $res = btindex::webapi_get(100, $db, 'torrents_got', 'torrents_fs');
+          my $res = btindex::webapi_get(100, $db, 'torrents_got');
           if($res->{status} != 200)
           {
             printf("webapi get error: %s\n", $res->{status});
@@ -112,6 +112,12 @@ MAIN: for(;;)
           }
 
           $remote = $res->{data};
+          if(!@$remote)
+          {
+            printf("nothing to do\n");
+            sleep(15);
+            next;
+          }
         }
         $tid = shift(@$remote) || next;
       }
@@ -120,7 +126,7 @@ MAIN: for(;;)
         #$tid = $random ? $dbdo->random_id() : $dbdo->it_id();
         if(!@$local)
         {
-          $local = btindex::tdb_get(1000, $db, 'torrents_got', 'torrents_fs');
+          $local = btindex::tdb_get(1000, $db, 'torrents_got');
         }
         $tid = shift(@$local) || next;
       }
@@ -158,7 +164,7 @@ MAIN: for(;;)
     my $s = $config->{tixati_torrents}.'/'.$t;
     my $tc = read_file($s) || next;
 
-    my $ih = btindex::torrent_infohash3($tc);
+    my $ih = btindex::torrent_infohash3($tc, sub { $con->Title(sprintf('hashing %.1f%% %d of %d %s', 100*$_[0]/$_[1], $_[0], $_[1])); });
     if(!$ih)
     {
       print("cant hash $s\n");
