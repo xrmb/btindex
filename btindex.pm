@@ -150,16 +150,18 @@ sub logs
 }
 
 
-sub torrent_data($)
+sub torrent_data
 {
-  my ($tid) = @_;
+  my ($tid, $checkzip) = @_;
   my $tf = torrent_path($tid);
   if(-f $tf) { return read_file($tf); }
+
+  return unless $checkzip;
 
   my $l1 = substr($tid, 0, 2);
   my $l2 = substr($tid, 2, 2);
   my $zip = Archive::Zip->new();
-  if($zip->read(__FILE__."/../torrents/$l1/$l2.zip") != 0) { return; }
+  if($zip->read(__FILE__."/../torrents/$l1/$l2.zip") != 0) { warn "zip broken? $l1/$l2.zip"; return; }
   return $zip->contents($tid);
 }
 
@@ -969,6 +971,7 @@ sub badhash
 
   return 1 if($hash =~ /^0000000/ && $hash =~ /0000$/);
   return 1 if($hash =~ /0000000/ || $hash =~ /FFFFFFF/);
+  return 1 if($hash =~ /13157FA15FEFE36B836589D2/);
 }
 
 
@@ -1168,11 +1171,12 @@ sub tdb_get
   if($count < 1) { $count = 1; }
 
   if(ref($dbi) ne 'ARRAY') { $dbi = [$dbi]; }
-  push(@$dbi, 'rarbg_n', 'trackers_n');
+  my $dbp1 = [];
+  my $dbp2 = ['trackers_n'];
 
   my %dbfh;
   my %offsets;
-  foreach my $db (@dbx, @$dbi)
+  foreach my $db (@dbx, @$dbi, @$dbp1, @$dbp2)
   {
     my $dbf = config('dbs').'/'.$db;
     open(my $fh, '<', $dbf) || die "$!/$dbf";
@@ -1192,7 +1196,7 @@ sub tdb_get
     my $l2 = int(rand(256));
 
     my %hashs;
-    foreach my $db (@dbx, @$dbi)
+    foreach my $db (@dbx, @$dbi, @$dbp1, @$dbp2)
     {
       my $offset = 0x40000;
 
@@ -1227,20 +1231,35 @@ sub tdb_get
     }
 
 
-    my %h = map { $_ => 1 } map { @{$hashs{$_}} } @$dbi;
+    my %hi = map { $_ => 1 } map { @{$hashs{$_}} } @$dbi;
+    my %h1 = map { $_ => 1 } map { @{$hashs{$_}} } @$dbp1;
+    my %h2 = map { $_ => 1 } map { @{$hashs{$_}} } @$dbp2;
     foreach my $db (@dbx, '*fs')
     {
       foreach my $hash (@{$hashs{$db}})
       {
-        if(delete($h{$hash}))
-        {
-          #warn("x $hash") if($db eq '*fs');
-        }
+        if(delete($hi{$hash})) { }
+        if(delete($h1{$hash})) { }
+        if(delete($h2{$hash})) { }
       }
     }
 
-    my @h = keys(%h);
     my $p = rand(1000);
+    my @h = keys(%h1);
+    while(@r < $count * 0.33 && @h)
+    {
+      push(@r, splice(@h, $p % scalar(@h), 1));
+      $p += rand(1000);
+    }
+
+    @h = keys(%h2);
+    while(@r < $count * 0.66 && @h)
+    {
+      push(@r, splice(@h, $p % scalar(@h), 1));
+      $p += rand(1000);
+    }
+
+    @h = keys(%hi);
     while(@r < $count && @h)
     {
       push(@r, splice(@h, $p % scalar(@h), 1));
@@ -1444,7 +1463,7 @@ sub load
       my $id1 = sprintf('%02X', $i1);
       my $d;
       my $r = sysread($fh, $d, $offsets[$o]*20);
-      if($r != $offsets[$o]*20) { die "$id0/$id1 -> want: $offsets[$o], got: ".($r).", length: ".length($d); }
+      if($r != $offsets[$o]*20) { die "$id0/$id1 -> want: $offsets[$o], got: ".($r).", length: ".length($d)." in $self->{dbf}"; }
       #$self->{db}{$id0}{$id1} = uc(unpack('H*', $d));
       $self->{db}{$id0}{$id1} = $d;
     }
