@@ -220,3 +220,5 @@ TRACKER: foreach my $url (keys(%trackers))
 
 
 close($log);
+
+exit 0;
