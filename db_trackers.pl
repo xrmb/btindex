@@ -22,17 +22,17 @@ my $wget = SearchPath('wgetw') || SearchPath('wget') || die 'where is wget?';
 my @ts = localtime();
 my $config = btindex::config();
 
-my $db = new btindex::tdb(file => __FILE__.'/../dbs/trackers', save => 10_000_000);
-my $dbc = new btindex::tdb(file => __FILE__.'/../dbs/trackers_c', save => 10_000_000);
-my $dbi = new btindex::tdb(file => __FILE__.'/../dbs/trackers_i', save => 10_000_000);
-my $dbn = new btindex::tdb(file => __FILE__.'/../dbs/trackers_n', save => 10_000_000);
-my $dbnd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_n_%04d%02d%02d', $ts[5]+1900, $ts[4]+1, $ts[3]), save => 10_000_000);
-my $dbcd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_c_%04d%02d%02d', $ts[5]+1900, $ts[4]+1, $ts[3]), save => 10_000_000);
-my $dbd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_%04d%02d%02d', $ts[5]+1900, $ts[4]+1, $ts[3]), save => 10_000_000);
+#my $db = new btindex::tdb(file => __FILE__.'/../dbs/trackers', save => 10_000_000);
+#my $dbc = new btindex::tdb(file => __FILE__.'/../dbs/trackers_c', save => 10_000_000);
+#my $dbi = new btindex::tdb(file => __FILE__.'/../dbs/trackers_i', save => 10_000_000);
+#my $dbn = new btindex::tdb(file => __FILE__.'/../dbs/trackers_n', save => 10_000_000);
+#my $dbnd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_n_%04d%02d%02d', $ts[5]+1900, $ts[4]+1, $ts[3]), save => 10_000_000);
+#my $dbcd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_c_%04d%02d%02d', $ts[5]+1900, $ts[4]+1, $ts[3]), save => 10_000_000);
+#my $dbd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_%04d%02d%02d', $ts[5]+1900, $ts[4]+1, $ts[3]), save => 10_000_000);
 
-$dbc->clear();
-$dbi->clear();
-$dbn->clear();
+#$dbc->clear();
+#$dbi->clear();
+#$dbn->clear();
 
 open(my $log, '>>', __FILE__.'/../data/db_trackers.log');
 
@@ -41,7 +41,7 @@ my %trackers = (
     'http://coppersurfer.tk/full_scrape_not_a_tracker.tar.gz' => 'cs',
     'http://scrape.leechers-paradise.org/static_scrape' => 'lp',
     #'http://internetwarriors.net/full.tar.gz' => 'iw',
-    'http://tracker.sktorrent.net/full_scrape_not_a_tracker.tar.gz' => 'sk'
+    #'http://tracker.sktorrent.net/full_scrape_not_a_tracker.tar.gz' => 'sk'
   );
 
 TRACKER: foreach my $url (keys(%trackers))
@@ -78,7 +78,8 @@ TRACKER: foreach my $url (keys(%trackers))
     if(read($fh, $data, 0x10000) != 0x10000) { next; }
   }
 
-  my $dbntd = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers_n_%04d%02d%02d_%s', $ts[5]+1900, $ts[4]+1, $ts[3], $trackers{$url}), save => 10_000_000);
+  my $dbc = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers2_c_%04d%02d%02d_%s', $ts[5]+1900, $ts[4]+1, $ts[3], $trackers{$url}), save => 10_000_000);
+  my $dbi = new btindex::tdb(file => sprintf(__FILE__.'/../dbs/trackers2_i_%04d%02d%02d_%s', $ts[5]+1900, $ts[4]+1, $ts[3], $trackers{$url}), save => 10_000_000);
 
   my $c = 0;
   my $ac = 0;
@@ -106,21 +107,20 @@ TRACKER: foreach my $url (keys(%trackers))
 
       #printf("%s\t%d\t%d\t%d\t%d\n", $tid, $cc, $ic, $i, $l);
 
+      if($cc+$ic) { warn("$tid nobody?"); }
+
       my $added;
-      $dbd->sid($tid, add => 1);
-      my $id = $db->sid($tid, add => \$added);
+      my $id;
+      if($cc) { $id = $dbc->sid($tid, add => \$added); }
+      if(!$id && $ic) { $id = $dbi->sid($tid, add => \$added); }
       if($added)
       {
-        printf("%s\t%08x\t%d\t%d\t%.2f%%\n", $tid, $id, $ac, $c, $ac/$c*100);
+        if($ac % 100 == 0)
+        {
+          printf("%s\t%08x\t%d\t%d\t%.2f%%\n", $tid, $id, $ac, $c, $ac/$c*100);
+        }
         $ac++;
-
-        $dbn->sid($tid, add => 1);
-        $dbnd->sid($tid, add => 1);
-        $dbntd->sid($tid, add => 1);
       }
-
-      if($cc) { $dbc->sid($tid, add => 1); $dbcd->sid($tid, add => 1); }
-      if($ic) { $dbi->sid($tid, add => 1); }
 
       if($fh && $i > length($data)-1000)
       {
@@ -171,20 +171,17 @@ TRACKER: foreach my $url (keys(%trackers))
       #printf("%s\t%d\t%d\n", $tid, $cc, $ic);
 
       my $added;
-      $dbd->sid($tid, add => 1);
-      my $id = $db->sid($tid, add => \$added);
+      my $id;
+      if($cc) { $id = $dbc->sid($tid, add => \$added); }
+      if(!$id && $ic) { $id = $dbi->sid($tid, add => \$added); }
       if($added)
       {
-        printf("%s\t%08x\t%d\t%d\t%.2f%%\n", $tid, $id, $ac, $c, $ac/$c*100);
+        if($ac % 100 == 0)
+        {
+          printf("%s\t%08x\t%d\t%d\t%.2f%%\n", $tid, $id, $ac, $c, $ac/$c*100);
+        }
         $ac++;
-
-        $dbn->sid($tid, add => 1);
-        $dbnd->sid($tid, add => 1);
-        $dbntd->sid($tid, add => 1);
       }
-
-      if($cc) { $dbc->sid($tid, add => 1); $dbcd->sid($tid, add => 1); }
-      if($ic) { $dbi->sid($tid, add => 1); }
 
       if($fh && $i > length($data)-1000)
       {
