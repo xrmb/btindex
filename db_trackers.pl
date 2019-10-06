@@ -23,6 +23,8 @@ my $curl = SearchPath('curlw') || SearchPath('curl');
 my @ts = localtime();
 my $config = btindex::config();
 my $db_trackers_dl = $config->{db_trackers_dl} || Cwd::abs_path(__FILE__.'/../db_trackers.dl');
+my $db_trackers_dl2 = $db_trackers_dl;
+$db_trackers_dl =~ s|\\|\\\\|g;
 
 #my $db = new btindex::tdb(file => $config->{dbs}.'/trackers', save => 10_000_000);
 #my $dbc = new btindex::tdb(file => $config->{dbs}.'/trackers_c', save => 10_000_000);
