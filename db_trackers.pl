@@ -22,9 +22,9 @@ my $curl = SearchPath('curlw') || SearchPath('curl');
 
 my @ts = localtime();
 my $config = btindex::config();
-my $db_trackers_dl = $config->{db_trackers_dl} || Cwd::abs_path(__FILE__.'/../db_trackers.dl');
+my $db_trackers_dl = $config->{db_trackers_dl} || __FILE__.'/../db_trackers.dl';
 my $db_trackers_dl2 = $db_trackers_dl;
-$db_trackers_dl =~ s|\\|\\\\|g;
+$db_trackers_dl2 =~ s|\\|\\\\|g;
 
 #my $db = new btindex::tdb(file => $config->{dbs}.'/trackers', save => 10_000_000);
 #my $dbc = new btindex::tdb(file => $config->{dbs}.'/trackers_c', save => 10_000_000);
@@ -55,7 +55,9 @@ TRACKER: foreach my $url (keys(%trackers))
   #my $cmd = "$wget $url -O - -T 10 -q";
   my $proxy = int(rand() * 9)+1;
   #my $cmd = "$curl -s --connect-timeout 15 --socks5 p$proxy.xrmb.org:14480 $url --output - 2>> s:\\db_trackers.err";
-  system("$curl -s --connect-timeout 15 --socks5 p$proxy.xrmb.org:14480 $url --output $db_trackers_dl");
+  my $cmd = qq|$curl -s --connect-timeout 15 --socks5 p$proxy.xrmb.org:14480 $url --output $db_trackers_dl2|;
+  #warn $cmd;
+  system($cmd);
   my $dl = $db_trackers_dl;
   if($ARGV[0])
   {
